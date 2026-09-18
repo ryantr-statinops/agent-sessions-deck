@@ -376,15 +376,15 @@
       "path": "personal/engineering/backend/service-architecture/SKILL.md"
     },
     {
-      "id": "personal/engineering/data-engineering/core",
+      "id": "personal/engineering/data/core",
       "name": "core",
-      "description": "Apply personal data-engineering foundations for data contracts, lineage, quality, storage, and reproducible workflows.",
+      "description": "Apply personal data engineering foundations for data contracts, lineage, quality, storage, and reproducible workflows.",
       "category": "personal",
-      "subject": "data-engineering",
+      "subject": "data",
       "scope": "personal",
       "status": "experimental",
       "version": "1.0.0",
-      "path": "personal/engineering/data-engineering/core/SKILL.md"
+      "path": "personal/engineering/data/core/SKILL.md"
     },
     {
       "id": "personal/decision/architecture-tradeoff",
@@ -497,18 +497,29 @@
       "path": "personal/engineering/backend/SKILL.md"
     },
     {
-      "id": "personal/engineering/data-engineering",
-      "name": "data-engineering",
-      "description": "Route personal data engineering work to pipeline, database, or orchestration workflows.",
+      "id": "personal/engineering/core",
+      "name": "core",
+      "description": "Analyze and improve software systems using computational thinking, complexity, measurement, and explicit engineering trade-offs before choosing an implementation.",
       "category": "personal",
       "subject": "engineering",
       "scope": "personal",
       "status": "experimental",
       "version": "1.0.0",
-      "path": "personal/engineering/data-engineering/SKILL.md"
+      "path": "personal/engineering/core/SKILL.md"
     },
     {
-      "id": "personal/engineering/data-engineering/databases",
+      "id": "personal/engineering/data",
+      "name": "data",
+      "description": "Route personal data engineering work to core, pipeline, database, or orchestration workflows.",
+      "category": "personal",
+      "subject": "engineering",
+      "scope": "personal",
+      "status": "experimental",
+      "version": "1.0.0",
+      "path": "personal/engineering/data/SKILL.md"
+    },
+    {
+      "id": "personal/engineering/data/databases",
       "name": "databases",
       "description": "Choose and design personal data storage and query patterns based on workload, consistency, scale, and operational simplicity.",
       "category": "personal",
@@ -516,7 +527,7 @@
       "scope": "personal",
       "status": "experimental",
       "version": "1.0.0",
-      "path": "personal/engineering/data-engineering/databases/SKILL.md"
+      "path": "personal/engineering/data/databases/SKILL.md"
     },
     {
       "id": "personal/engineering/infrastructure/docker",
@@ -532,7 +543,7 @@
     {
       "id": "personal/engineering",
       "name": "engineering",
-      "description": "Route personal engineering work to backend, data engineering, infrastructure, or lightweight frontend workflows.",
+      "description": "Route personal engineering work through shared foundations to data, AI, backend, infrastructure, or lightweight frontend workflows.",
       "category": "personal",
       "subject": "engineering",
       "scope": "personal",
@@ -607,7 +618,7 @@
       "path": "personal/engineering/infrastructure/networking/SKILL.md"
     },
     {
-      "id": "personal/engineering/data-engineering/orchestration",
+      "id": "personal/engineering/data/orchestration",
       "name": "orchestration",
       "description": "Plan and operate personal data workflow scheduling with dependencies, retries, observability, and ownership.",
       "category": "personal",
@@ -615,10 +626,10 @@
       "scope": "personal",
       "status": "experimental",
       "version": "1.0.0",
-      "path": "personal/engineering/data-engineering/orchestration/SKILL.md"
+      "path": "personal/engineering/data/orchestration/SKILL.md"
     },
     {
-      "id": "personal/engineering/data-engineering/pipelines",
+      "id": "personal/engineering/data/pipelines",
       "name": "pipelines",
       "description": "Design personal data pipelines with explicit inputs, transformations, outputs, quality checks, and reproducible execution.",
       "category": "personal",
@@ -626,7 +637,7 @@
       "scope": "personal",
       "status": "experimental",
       "version": "1.0.0",
-      "path": "personal/engineering/data-engineering/pipelines/SKILL.md"
+      "path": "personal/engineering/data/pipelines/SKILL.md"
     },
     {
       "id": "personal/engineering/backend/python",
