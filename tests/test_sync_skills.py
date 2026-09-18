@@ -40,10 +40,29 @@ class SyncSkillsTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
             copied = destination / "common/workflow/feature-delivery/SKILL.md"
             self.assertTrue(copied.is_file())
+            for template in (
+                "CONTEXT.md",
+                "feature-spec.md",
+                "code-review-report.md",
+                "handoff.md",
+            ):
+                self.assertTrue((destination / "templates" / template).is_file())
 
             second = self.run_sync("--bundle", "feature-delivery", str(destination))
             self.assertNotEqual(second.returncode, 0)
             self.assertIn("already exist", second.stderr)
+
+    def test_explicit_workflow_sync_includes_declared_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "skills"
+            result = self.run_sync(
+                str(destination),
+                "common/workflow/feature-delivery",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(
+                (destination / "common/foundation/task-planning/SKILL.md").is_file()
+            )
 
 
 if __name__ == "__main__":
