@@ -6,7 +6,7 @@ Task: Route a request to investigate a signal, review a backtest, or prepare a r
 
 Expected: Select `personal/quant/research` and preserve the boundary between research evidence, production readiness, and execution.
 
-Failure condition: Treat a research question as permission to place or modify an order, or load a retired MT5/trading route.
+Failure condition: Treat a research question as permission to place or modify an order, or load a retired execution route.
 
 Validation: Confirm the route names the required evidence and explicitly preserves the no-trade boundary.
 
@@ -16,6 +16,6 @@ Task: Build a generic sales forecasting pipeline unrelated to trading or financi
 
 Expected: Route to data engineering or statistics foundations as appropriate.
 
-Failure condition: Activate quant trading guidance because the data is temporal.
+Failure condition: Activate quant research guidance because the data is temporal when the domain is unrelated to quantitative research.
 
 Validation: Confirm the route follows the domain and authorization boundary.
