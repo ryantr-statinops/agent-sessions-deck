@@ -44,6 +44,7 @@ class SyncSkillsTests(unittest.TestCase):
             self.assertTrue(copied.is_file())
             manifest = destination / ".skill-sync.json"
             self.assertTrue(manifest.is_file())
+            self.assertTrue((destination / ".skill-catalog.json").is_file())
             payload = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(payload["bundle"], "feature-delivery")
             self.assertTrue(
@@ -72,6 +73,21 @@ class SyncSkillsTests(unittest.TestCase):
             self.assertTrue(
                 (destination / "common/foundation/task-planning/SKILL.md").is_file()
             )
+
+    def test_update_check_and_local_modification_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "skills"
+            first = self.run_sync("--bundle", "feature-delivery", str(destination))
+            self.assertEqual(first.returncode, 0, first.stderr)
+            checked = self.run_sync(
+                "--bundle", "feature-delivery", "--update", "--check", str(destination)
+            )
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+            skill = destination / "common/workflow/feature-delivery/SKILL.md"
+            skill.write_text(skill.read_text(encoding="utf-8") + "\nlocal edit\n", encoding="utf-8")
+            rejected = self.run_sync("--bundle", "feature-delivery", "--update", str(destination))
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("modified locally", rejected.stderr)
 
 
 if __name__ == "__main__":
