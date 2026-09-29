@@ -1,0 +1,9 @@
+host: Linux 7.1.5-76070105-generic x86_64
+date_utc: 2026-09-29T10:18:48Z
+go: go version go1.26.7 linux/amd64
+python: Python 3.12.3
+tmux: tmux 3.4
+terminfo: #	Reconstructed via infocmp from file: /usr/share/terminfo/x/xterm-256color
+opencode: 1.18.33
+omp: omp/18.4.2
+orca: 1.4.215
