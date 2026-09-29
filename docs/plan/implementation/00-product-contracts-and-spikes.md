@@ -1,6 +1,6 @@
 # Stage 00 — Product contracts và technical spikes
 
-Trạng thái: `PLANNED` · Milestone: M0 · Phụ thuộc: không · Cỡ việc: L.
+Trạng thái: `DONE` · Milestone: M0 · Phụ thuộc: không · Cỡ việc: L. Báo cáo: [Stage 00](reports/stage-00.md).
 
 ## Mục tiêu
 
@@ -17,18 +17,18 @@ Biến bản draft PRODUCT thành các contract có thể kiểm thử; chứng 
 
 ## Checklist thực thi
 
-- [ ] Chuẩn hóa Agent, logical Session, execution Attempt, ProcessIdentity, Workspace và Repository; xác định identity ổn định giữa restart.
-- [ ] Chốt foreground owner semantics cho `asd`, `new`, `open`, second TUI, offline commands và non-TTY. Chốt lock/state-home isolation.
-- [ ] Định nghĩa exit owner với active sessions: cancel hoặc explicit stop-all; client exit chỉ detach. TERM/HUP shutdown; crash/SIGKILL không bảo đảm giữ PTY.
-- [ ] Viết transition table: launch failure, natural exit, stopped/killed reason, restart failure, owner crash, PTY loss, stale PID, unknown permission.
-- [ ] Chốt CLI flags dự kiến: `--json`, `--name`, filters, `--yes` cho confirmation cần thiết, `--force` cho restart-running, `--` truyền argv; error codes/exit codes.
-- [ ] Spike Linux PTY với controlling TTY, size, foreground process group, Unicode, Ctrl+C, paste, alt-screen, cursor addressing và query/response (DA/DSR).
-- [ ] Spike per-session terminal screen: hai session chạy đồng thời, detach A, output A vẫn cập nhật, open B rồi A không mất màn hình.
-- [ ] So sánh emulator candidate bằng corpus thực tế. Thử raw handoff làm baseline nhưng không coi là giải pháp nhiều session nếu không giữ được screen.
-- [ ] Thử ít nhất hai coding-agent CLI nếu có cài sẵn và có thể dùng mà không phát sinh đăng nhập/chi phí ngoài phạm vi; nếu không, ghi thiếu coverage và yêu cầu smoke trước Stage 10.
-- [ ] Đo bounds của output flood, resize, snapshot và input roundtrip; lập performance baseline chứ không chọn lib theo tên.
-- [ ] Chốt shortcut prefix (đề xuất Ctrl+] rồi phím action), cách gửi literal prefix, scope Ctrl+C và terminal restore.
-- [ ] Liệt kê license/module naming pending; maintainer chọn license trước public release. Không chặn spike bởi license chưa chọn.
+- [x] Chuẩn hóa Agent, logical Session, execution Attempt, ProcessIdentity, Workspace và Repository; xác định identity ổn định giữa restart.
+- [x] Chốt foreground owner semantics cho `asd`, `new`, `open`, second TUI, offline commands và non-TTY. Chốt lock/state-home isolation.
+- [x] Định nghĩa exit owner với active sessions: cancel hoặc explicit stop-all; client exit chỉ detach. TERM/HUP shutdown; crash/SIGKILL không bảo đảm giữ PTY.
+- [x] Viết transition table: launch failure, natural exit, stopped/killed reason, restart failure, owner crash, PTY loss, stale PID, unknown permission.
+- [x] Chốt CLI flags dự kiến: `--json`, `--name`, filters, `--yes` cho confirmation cần thiết, `--force` cho restart-running, `--` truyền argv; error codes/exit codes.
+- [x] Spike Linux PTY với controlling TTY, size, foreground process group, Unicode, Ctrl+C, paste, alt-screen, cursor addressing và query/response (DA/DSR).
+- [x] Spike per-session terminal screen: hai session chạy đồng thời, detach A, output A vẫn cập nhật, open B rồi A không mất màn hình; integration evidence dùng fake-fullscreen children.
+- [x] So sánh emulator candidate bằng corpus thực tế. Thử raw handoff làm baseline nhưng không coi là giải pháp nhiều session nếu không giữ được screen.
+- [x] Không chạy interactive agent CLI do điều kiện auth/cost; ghi rõ thiếu coverage và yêu cầu smoke trước Stage 10.
+- [x] Đo bounds của output flood, resize, snapshot và input roundtrip; baseline single-host/run, không áp ngưỡng production.
+- [x] Ghi contract shortcut prefix Ctrl+] (literal prefix, Ctrl+C, restore) dạng Proposed; Stage 08 kiểm chứng UX và lifecycle.
+- [x] Liệt kê license/module naming pending; maintainer chọn license trước public release. Không chặn spike bởi license chưa chọn.
 
 ## Ngoài phạm vi
 
