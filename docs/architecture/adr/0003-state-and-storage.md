@@ -106,7 +106,7 @@ documented rules, keep a backup, and never delete the source silently.
 1. **License** (PRODUCT.md: `TBD`). No license is selected in this slice —
    selecting one is a legal decision for the maintainer, required before
    public release (Stage 10 gate). It does not block contracts or spikes.
-2. **Go module identity — pending Stage 01 verification.** The module path must match the verified repository origin; Stage 01 records the selected path.
+2. **Go module identity — resolved for this repository in Stage 01.** `go.mod` uses `github.com/ryantr-statinops/agent-sessions-deck`, matching verified `origin`. If renamed or transferred, update `go.mod`, `go.sum`, `vendor/` and import paths together.
 3. Exact private fallback runtime path when `XDG_RUNTIME_DIR` is unset
    (Stage 06).
 4. Whether the two-file (`sessions.json` + `state.json`) layout survives or
