@@ -21,7 +21,7 @@ Có nền Go build/test và fixture độc lập với vendor để các stage s
 - [x] Test cleanup theo process start-time/fixture identity và PTY identity; không dùng `pkill` theo executable name.
 - [x] Thêm version/build metadata và `asd --help`/`--version` tối thiểu; command khác triển khai ở 06.
 - [x] Viết setup/dev instructions; nêu Linux-only và nhu cầu TTY của integration.
-- [x] Ghi module/license decisions: module path khớp `origin`; license còn chờ maintainer, không thêm `LICENSE`.
+- [x] Ghi module/license decisions: module path khớp `origin`; maintainer đã chọn MIT sau Stage 01 và thêm root `LICENSE`.
 
 ## Ngoài phạm vi
 
