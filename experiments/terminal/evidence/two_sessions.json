@@ -1,0 +1,25 @@
+{
+  "probe": "two_sessions",
+  "results": [
+    {
+      "name": "detached_progress",
+      "passed": true,
+      "detail": "A tick at detach=6, A log latest=28 (grew while undrained=True), B advanced 12->28"
+    },
+    {
+      "name": "screen_restore",
+      "passed": true,
+      "detail": "A tick 6 -> 38 after re-attach, source sequence contiguous=True (39 ticks)"
+    },
+    {
+      "name": "session_isolation",
+      "passed": true,
+      "detail": "B advanced independently 12 -> 28"
+    },
+    {
+      "name": "detach_stall_bound",
+      "passed": true,
+      "detail": "attached n=39 max gap=31ms; with 2s undrained flood n=120 max gap=1867ms (child blocked on full PTY buffer)"
+    }
+  ]
+}

@@ -8,7 +8,7 @@
 **Primary language:** Go  
 **Target platform:** Linux first  
 **Interface:** CLI app with TUI  
-**License:** TBD
+**License:** MIT (see `LICENSE`), selected by the maintainer.
 
 ---
 
@@ -232,9 +232,19 @@ CWD: /home/user/Kestrel
 
 ---
 
-## Session
+## Attempt
 
-A command started by ASD for a selected agent and workspace, with interactive input/output and a tracked process lifecycle.
+One execution of a Session's resolved command in its workspace. Each attempt has a generation number scoped to its session, an immutable resolved command, timestamps, an exit reason, and observed process identity. A restart keeps the Session ID and creates a new attempt; concurrent attempts of the same session are forbidden.
+
+---
+
+## Process identity
+
+The evidence that a live OS process is the one ASD started for a given attempt: PID plus process-group ID, process start time, boot ID, and the owner instance ID. A PID alone never proves ownership.
+
+---
+
+The normative definitions for Session, Attempt, and Process identity — including the mapping of legacy status labels — live in `docs/architecture/glossary.md` and `docs/architecture/session-state-machine.md`.
 
 ---
 
@@ -468,20 +478,14 @@ type Session struct {
 }
 ```
 
-Status:
+Session state is a triple of three orthogonal axes — Lifecycle (process truth: `created/starting/running/stopping/exited/failed/unknown`), Attachment (I/O truth: `attached/detached/unavailable`), and Activity (provider-evidenced hint: `unknown/working/idle`, never inferred from silence). `ORPHANED` is an annotation (`running` + I/O `unavailable`), not a lifecycle state. The normative transition tables live in `docs/architecture/session-state-machine.md`; the Go sketch below is illustrative only and must not be treated as the state enum:
 
 ```go
-type Status string
-
-const (
-    StatusRunning Status = "running"
-    StatusIdle    Status = "idle"
-    StatusDead    Status = "dead"
-    StatusUnknown Status = "unknown"
-)
+// Illustrative only; see docs/architecture/session-state-machine.md.
+type Status string // e.g. "running", "exited", "failed", "unknown"
 ```
 
-The status model should be extensible.
+The state model (each axis) should be extensible in a backward-compatible way.
 
 ---
 
@@ -514,7 +518,7 @@ This allows users to identify sessions by project context rather than only by pr
 
 # 12. Session Lifecycle
 
-A session follows a lifecycle:
+Legacy illustrative diagram — display labels only, not the normative state model:
 
 ```text
                 ┌───────────┐
@@ -531,6 +535,8 @@ A session follows a lifecycle:
                   │
                   └───► RUNNING
 ```
+
+> Legacy illustrative diagram: `IDLE` is not a lifecycle state (idleness is Activity, provider-evidenced only) and `DEAD` is display shorthand for lifecycle `exited`/`failed` distinguished by exit reason. Normative contract: the binding lifecycle/attachment/activity triple and transition table live in `docs/architecture/session-state-machine.md`.
 
 The lifecycle must distinguish:
 
@@ -558,7 +564,7 @@ These operations must not be conflated.
 
 # 13. CLI
 
-The CLI provides scriptable access to core operations.
+The CLI provides scriptable access to core operations. Session IDs are stable strings (numeric examples below are shorthand); ambiguous ID prefixes are rejected, never guessed. Flags, error codes, and exit codes are frozen in `docs/architecture/cli-contract.md`.
 
 ## Launch TUI
 
@@ -878,20 +884,24 @@ then the session becomes:
 DEAD
 ```
 
+Legacy display labels in the examples above: `RUNNING` ≈ lifecycle `running`; `DEAD` ≈ lifecycle `exited`/`failed` distinguished by exit reason. The normative reconciliation invariants live in `docs/architecture/session-state-machine.md`.
+
 This prevents stale session records.
 
 ---
 
 # 20. Storage
 
-Initial persistent state:
+Persistent state follows the XDG split (normative paths in `docs/architecture/adr/0003-state-and-storage.md`):
 
 ```text
-~/.config/asd/
-├── config.yaml
-├── sessions.json
-└── state.json
+$XDG_CONFIG_HOME/asd/config.yaml      # default ~/.config/asd/config.yaml
+$XDG_STATE_HOME/asd/sessions.json     # default ~/.local/state/asd/
+$XDG_STATE_HOME/asd/state.json
+$XDG_RUNTIME_DIR/asd/control.sock     # owner control socket, not persisted state
 ```
+
+A legacy `~/.config/asd/sessions.json`, if present, is imported once under documented rules with a backup kept; the source is never deleted silently.
 
 SQLite is intentionally not required for the first product release.
 
@@ -1150,6 +1160,8 @@ WORKSPACES
 ● Quant
   └── OMP          research       RUNNING
 ```
+
+Legacy display labels in the example above: `RUNNING` ≈ lifecycle `running`; `IDLE` here is an Activity hint (provider-evidenced only), not a lifecycle state. The normative lifecycle/attachment/activity triple lives in `docs/architecture/session-state-machine.md`.
 
 This changes the primary mental model from:
 
@@ -1476,13 +1488,15 @@ Examples:
 
 ### Agent crashes
 
+Legacy display shorthand (lifecycle `running` → lifecycle `exited`/`failed` distinguished by exit reason):
+
 ```text
 RUNNING → DEAD
 ```
 
 ### Managed PTY becomes unavailable
 
-The session becomes `ORPHANED` if the process is still alive but interactive input/output cannot be restored.
+The session is annotated `ORPHANED` (lifecycle `running` + Attachment `unavailable`) if the process is still alive but interactive input/output cannot be restored. `ORPHANED` is an annotation, not a lifecycle state; see `docs/architecture/session-state-machine.md`.
 
 ### ASD itself crashes
 
@@ -1656,7 +1670,7 @@ A fake provider is important:
 fake-asd
 ```
 
-It can simulate:
+It can simulate (legacy display labels mixing axes; normative axes in `docs/architecture/session-state-machine.md` — `idle` is an Activity hint, provider-evidenced only):
 
 ```text
 running
@@ -1821,6 +1835,8 @@ asd workspace start <name>    # start workspace profile
 ```
 
 The product should prefer a small, memorable command surface over exposing every internal operation.
+
+Scope note: `history` ships in V2 (dedicated history, Stage 13) and `workspace list` / `workspace start` ship in V3 (profiles, Stage 15). In V1, past-session metadata is visible through `list` / `inspect`; the V1 command contract is frozen in `docs/architecture/cli-contract.md`.
 
 ---
 

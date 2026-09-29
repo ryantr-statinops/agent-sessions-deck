@@ -41,3 +41,9 @@ htmlcov/
 
 # Local planning notes
 local.md
+
+# Go build and profiling artifacts
+/bin/
+/coverage.out
+*.test
+*.prof

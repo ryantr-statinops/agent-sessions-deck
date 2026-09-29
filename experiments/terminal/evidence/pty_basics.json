@@ -1,0 +1,45 @@
+{
+  "probe": "pty_basics",
+  "results": [
+    {
+      "name": "controlling_tty",
+      "passed": true,
+      "detail": "child tty='/dev/pts/18' raw='/dev/pts/18\\r\\n73818\\r\\n'"
+    },
+    {
+      "name": "initial_winsize",
+      "passed": true,
+      "detail": "stty size -> '24 80'"
+    },
+    {
+      "name": "resize_sigwinch",
+      "passed": true,
+      "detail": "SIGWINCH deliveries=2 after 2 resizes"
+    },
+    {
+      "name": "foreground_pgrp",
+      "passed": true,
+      "detail": "child reports tpgid=73940 pgid=73940 pid=73940 (fork pid 73940); outer tcsetpgrp not permitted without ctty (documented)"
+    },
+    {
+      "name": "io_roundtrip",
+      "passed": true,
+      "detail": "got b'hello asd\\n'"
+    },
+    {
+      "name": "ctrl_c_sigint",
+      "passed": true,
+      "detail": "SIGINT handler fired=True"
+    },
+    {
+      "name": "unicode",
+      "passed": true,
+      "detail": "sent 72 bytes, got 72, identical=True"
+    },
+    {
+      "name": "output_flood_bound",
+      "passed": true,
+      "detail": "drained 1000000/1000000 bytes in 0.03s (36682.5 KiB/s)"
+    }
+  ]
+}
