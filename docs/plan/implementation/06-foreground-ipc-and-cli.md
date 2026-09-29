@@ -36,6 +36,17 @@ Các command V1 thao tác cùng runtime từ nhiều terminal mà vẫn chỉ c�
 4. Duplicate request ID không tạo hai sessions; attach disconnect không terminate agent; second input lease bị từ chối.
 5. CLI integration assert JSON/error/exit code, malformed/oversize IPC và mismatched protocol; fixtures không yêu cầu real vendor.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 IPC worker và CLI worker có thể làm song song sau protocol freeze; coordinator giữ bootstrap/assembly. Stage chỉ hoàn thành khi E2E owner/client pass, không phải khi commands trả mock data. Handoff cho 07–08 là application client API và CLI examples đã chạy.

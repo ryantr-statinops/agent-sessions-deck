@@ -34,6 +34,17 @@ Chưa cần release automation đầy đủ, SQLite, vendor API hoặc codegen f
 - Fake agent chứng minh modes bằng test: exit, signal, child và resize handshake; cleanup không còn fixture PID/PTY.
 - CI có commands cụ thể có thể tái chạy local; arm64 cross-build kiểm tra compile, không quảng cáo runtime tested nếu chưa chạy.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/repository-onboarding`](../../../.agents/SKILLS/common/foundation/repository-onboarding/SKILL.md)
+- [`common/foundation/task-planning`](../../../.agents/SKILLS/common/foundation/task-planning/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/git-workflow`](../../../.agents/SKILLS/common/engineering/git-workflow/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Coordinator giữ `go.mod/go.sum` và build tooling; worker có thể giữ riêng fake agent sau khi mode protocol chốt. Handoff cho 02 là source layout, fake-agent protocol và lệnh kiểm tra chuẩn.

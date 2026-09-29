@@ -32,6 +32,18 @@ Chuyển ownership từ foreground owner sang local daemon `agentd`, để đón
 - Daemon crash/restart phân loại orphan/exit/unknown đúng; không reconnect PTY đã mất hoặc auto-kill external process.
 - Unit example và standalone daemon đều có bounded shutdown, private permissions và không mở network port.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/agent/failure-recovery`](../../../.agents/SKILLS/common/agent/failure-recovery/SKILL.md)
+- [`common/engineering/documentation`](../../../.agents/SKILLS/common/engineering/documentation/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Daemon owner làm ownership/startup migration; UI/CLI worker chỉ thay bootstrap routing sau contract freeze. Coordinator review compatibility và service policy. Handoff cho 12/13 là daemon event/snapshot/subscription API ổn định và V1→V2 migration evidence.

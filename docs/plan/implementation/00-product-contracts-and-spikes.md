@@ -42,6 +42,16 @@ Không xây daemon, MCP, profiles hoặc production dashboard. Không claim nati
 4. Ghi rõ emulator nào được chọn, version/import path tương thích, coverage chưa đạt và phương án giải quyết. Nếu spike fail, stage chưa DONE; cập nhật kiến trúc/scope trước khi tiếp tục 05/08.
 5. ADR giải thích vì sao socket V1 không đồng nghĩa daemon V2, và vì sao crash recovery không khôi phục PTY đã mất.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/requirements-analysis`](../../../.agents/SKILLS/common/foundation/requirements-analysis/SKILL.md)
+- [`common/workflow/research-decision`](../../../.agents/SKILLS/common/workflow/research-decision/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Một owner chốt contract; reviewer xem state transitions và process identity. Có thể giao terminal spike cho worker với riêng `experiments/terminal/`; owner hợp nhất quyết định. Handoff cho 01–02 gồm dependency shortlist, state table, command matrix và unresolved decisions có gate rõ ràng.

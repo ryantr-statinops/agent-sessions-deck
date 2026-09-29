@@ -95,6 +95,8 @@ flowchart LR
 
 ## Cách thực thi một stage
 
+Mỗi stage có mục **Skills tham khảo** với skill candidates đúng công đoạn; đó là gợi ý chọn lọc, không phải yêu cầu phải nạp mọi skill. Xem [hướng dẫn .agents](../../../.agents/AGENTS.md), kiểm tra trạng thái skill trong [promoted set](../../../.agents/SKILLS/data/promoted.json), rồi đọc từng `SKILL.md` được chọn trước khi áp dụng. PRODUCT, quyết định đã duyệt và acceptance của stage luôn là nguồn chuẩn.
+
 1. Đọc PRODUCT, README này và file stage. Kiểm tra dependency đã có evidence, không chỉ đã merge.
 2. Chia checklist thành task nhỏ, mỗi task một owner và phạm vi file cụ thể. Chốt API trước các task song song.
 3. Triển khai cùng các test hành vi liên quan. Không để toàn bộ testing đến Stage 10.

@@ -32,6 +32,17 @@ Tìm agent cài trên máy và resolve workspace/Git context nhanh, chính xác,
 - Git fixtures gồm normal repo, nested cwd, linked worktree, detached HEAD, rename và non-repo.
 - Compatibility matrix nêu version, executable identity, launch args, terminal coverage, native capabilities và thời điểm kiểm tra; provider chưa xác minh không nằm trong supported list.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/repository-onboarding`](../../../.agents/SKILLS/common/foundation/repository-onboarding/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Discovery worker sở hữu provider registry; Git/workspace có thể tách worker khi contracts ổn định. Không cùng sửa go.mod: dependency request gửi coordinator. Handoff cho 06–08 là agent/workspace selection API và launch specs; provider real-smoke còn thiếu phải vào gate Stage 10.

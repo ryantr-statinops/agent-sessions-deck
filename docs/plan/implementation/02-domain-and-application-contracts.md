@@ -31,6 +31,17 @@ Một model và application service thống nhất dùng được từ CLI, TUI,
 - Natural nonzero exit khác launch failure; stop timeout không tự trở thành “killed”.
 - Events có ordering/revision rõ; subscriber chậm không giữ lock lifecycle và policy overflow đã mô tả.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/requirements-analysis`](../../../.agents/SKILLS/common/foundation/requirements-analysis/SKILL.md)
+- [`common/foundation/task-planning`](../../../.agents/SKILLS/common/foundation/task-planning/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Một owner sửa contracts; reviewer độc lập đối chiếu PRODUCT. Sau khi freeze DTO/ports, 03/04/05 có thể làm task riêng theo dependency. Thay đổi shared contract phải gửi coordinator để tránh worker tự tạo interface khác nhau.

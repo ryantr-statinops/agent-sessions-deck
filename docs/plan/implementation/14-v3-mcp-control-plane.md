@@ -34,6 +34,18 @@ Cho AI client truy vấn và thực hiện các thao tác ASD đã cấu hình, 
 - Một AI workflow tìm session theo workspace → get metadata → read bounded screen; mutation workflow chỉ pass khi policy được bật explicit.
 - Không có TCP listener hoặc arbitrary shell payload bypass; policy contract có tests độc lập với MCP transport.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/requirements-analysis`](../../../.agents/SKILLS/common/foundation/requirements-analysis/SKILL.md)
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/security/security-review`](../../../.agents/SKILLS/common/security/security-review/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 MCP worker giữ adapter/schema; app owner giữ policy enforcement và lease contract. Worker không copy lifecycle code vào tool handlers. Handoff cho 15 là names/schemas/scoped tool policy và client examples verified.

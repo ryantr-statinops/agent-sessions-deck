@@ -41,6 +41,17 @@ Không tự nhận process từ ngoài ASD, không pid scanner để adopt, khô
 - Tests identity mismatch/boot mismatch/old callback không signal hoặc overwrite attempt hiện tại; external sentinel process vẫn sống.
 - Race suite pass cho concurrent exit/stop/restart/input/resize, với timeout và fixture cleanup.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/task-planning`](../../../.agents/SKILLS/common/foundation/task-planning/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Một runtime owner giữ process/lifecycle; terminal engine worker có thể làm riêng parser/snapshot sau contract freeze. Coordinator duyệt transaction semantics và dependency. Handoff cho 06/08 gồm API, stream ordering, input lease, size constraints và số đo memory/backpressure.

@@ -31,6 +31,18 @@ History store/event persistence tại `internal/store/`, history application que
 - Pagination/filter fixtures, retention active-record protection và redaction/absence-of-secrets checks pass.
 - V2 release candidate chạy lại V1 critical workflow và V2 walkthrough, ghi versioned compatibility và storage limitations.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/engineering/dependency-management`](../../../.agents/SKILLS/common/engineering/dependency-management/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Store owner quyết định schema/migration; history UI worker sau query contract freeze. Stage 12/13 có thể song song nếu fields và event schema đã chốt. Handoff cho 14/15 gồm read APIs, cursor semantics và immutable event IDs phục vụ dedupe.

@@ -35,6 +35,17 @@ Chạy coding-agent full-screen ngay trong ASD, nhập liệu và chuyển sessi
 5. Smoke ít nhất ba concrete providers dự kiến hỗ trợ ở 10; nếu chưa có môi trường, carry gate rõ, không gắn supported badge.
 6. Flood workload giữ RAM bounded, UI back/detach vẫn đáp ứng; cleanup trả echo/cursor/alt-screen host về đúng trạng thái.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Terminal worker giữ adapter; UI owner phối hợp view switching; runtime owner nhận fix protocol qua task riêng. Mọi thay đổi shared contracts phải coordinator review. Handoff cho 09/10 gồm compatibility matrix, benchmarks và unsupported terminal features được tài liệu hóa.
