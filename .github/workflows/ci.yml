@@ -1,0 +1,96 @@
+name: CI
+
+# Linux-only baseline for asd. Every step below is a Makefile target that a
+# developer can rerun from the repository root; see docs/testing/development.md.
+#
+# Scope and honesty rules for this workflow:
+#   * no step installs, downloads or launches a coding-agent CLI, and no step
+#     needs a secret, credential, token or agent account;
+#   * the dependency cache stores Go build artifacts only (never agent config);
+#   * linux/arm64 is a compile check only. Nothing here executes an arm64
+#     binary, so arm64 runtime behaviour is not claimed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Fail loudly instead of silently downloading another toolchain.
+  GOTOOLCHAIN: local
+  # Offline: dependencies come from the committed vendor/ tree, never the network.
+  GOFLAGS: -mod=vendor
+  GOPROXY: 'off'
+  GOSUMDB: 'off'
+
+jobs:
+  verify:
+    name: Format, vet, test, cross-compile (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Keep in sync with the `toolchain` directive in go.mod (1.26.7).
+      GO_VERSION: '1.26.7'
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Require committed vendored dependencies
+        # GOFLAGS=-mod=vendor makes every later step fail on any download
+        # attempt, so vendor/ must be committed for CI to run offline.
+        run: |
+          if [ ! -f vendor/modules.txt ]; then
+            echo "::error::vendor/modules.txt is missing; run 'make vendor' and commit the result"
+            exit 1
+          fi
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # Cache is handled below so only the Go build cache is stored.
+          cache: false
+
+      - name: Cache the Go build cache
+        # Compiled artifacts only: no agent CLI, agent config, credential or
+        # token is written to or read from this cache.
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/go-build
+          key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ env.GO_VERSION }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: |
+            go-build-${{ runner.os }}-${{ runner.arch }}-go${{ env.GO_VERSION }}-
+
+      - name: Report toolchain
+        run: go version
+
+      - name: Check formatting
+        run: make fmt-check
+
+      - name: Vet
+        run: make lint
+
+      - name: Unit tests
+        run: make test
+
+      - name: Integration tests (fake agent, no installed CLI)
+        run: make test-integration
+
+      - name: Race detector
+        run: make test-race
+
+      - name: Build the host binary and run help/version
+        # `make smoke` builds bin/asd (with build metadata) and exercises
+        # --help and --version, which is the Stage 01 acceptance check.
+        run: make smoke
+
+      - name: Compile check for linux/arm64 (compile only, never executed)
+        run: make build-arm64
