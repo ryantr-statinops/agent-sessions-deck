@@ -75,7 +75,7 @@ flowchart LR
 | Discover workspace chưa có nguồn cụ thể | CWD, explicit path, configured/recent workspaces; không scan toàn disk | 04 |
 | `history/workspace` trong final CLI nhưng mục V1 không yêu cầu | Basic past metadata ở V1; dedicated history ở V2; profiles ở V3 | 00, 13, 15 |
 | Terminal emulation và shortcut collision chưa đặc tả | Compatibility matrix, prefix escape, input/resize contract | 00, 08 |
-| License chưa chọn; module path phải khớp repo identity | Module path hiện khớp origin remote; maintainer chọn license trước public release | 01, 10 |
+| License and module identity | MIT selected; module path matches verified `origin` | Keep `LICENSE` in release artifacts; regenerate module metadata on repository transfer | 01, 10 |
 
 ## Bản đồ coverage
 
