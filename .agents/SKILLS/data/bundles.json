@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "bundles": [
+    {
+      "id": "portable-agent-baseline",
+      "description": "Minimal portable context, recovery, onboarding, requirements, and discovery skills for an agent.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/agent/context-loading",
+        "common/agent/failure-recovery",
+        "common/foundation/repository-onboarding",
+        "common/foundation/requirements-analysis",
+        "meta/skill-discovery"
+      ]
+    },
+    {
+      "id": "engineering-core",
+      "description": "Portable engineering foundations for repository work, implementation, testing, review, and handoff.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/foundation/repository-onboarding",
+        "common/foundation/requirements-analysis",
+        "common/foundation/task-planning",
+        "common/engineering/git-workflow",
+        "common/engineering/debugging",
+        "common/engineering/testing",
+        "common/engineering/refactoring",
+        "common/engineering/code-review",
+        "common/engineering/dependency-management",
+        "common/engineering/documentation",
+        "common/delivery/change-review",
+        "common/agent/failure-recovery"
+      ]
+    },
+    {
+      "id": "feature-delivery",
+      "description": "Build a feature through requirements, planning, testing, implementation, review, and handoff.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/workflow/feature-delivery",
+        "common/foundation/requirements-analysis",
+        "common/foundation/task-planning",
+        "common/engineering/testing",
+        "common/engineering/code-review",
+        "common/delivery/change-review"
+      ]
+    },
+    {
+      "id": "bug-fixing",
+      "description": "Diagnose, fix, regression-test, review, and hand off a software defect.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/workflow/bug-fixing",
+        "common/engineering/debugging",
+        "common/engineering/testing",
+        "common/engineering/refactoring",
+        "common/engineering/code-review",
+        "common/delivery/change-review",
+        "common/agent/failure-recovery"
+      ]
+    },
+    {
+      "id": "research-decision",
+      "description": "Turn a research question into an evidence-backed technical or operational decision.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/workflow/research-decision",
+        "common/research/research",
+        "common/research/comparison"
+      ]
+    },
+    {
+      "id": "data-analysis",
+      "description": "Inspect, clean, validate, analyze, and report data reproducibly.",
+      "scope": "universal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "common/workflow/data-analysis",
+        "common/data/data-inspection",
+        "common/data/data-cleaning",
+        "common/data/schema-validation",
+        "common/data/reproducible-analysis"
+      ]
+    },
+    {
+      "id": "personal-python",
+      "description": "Ryan's Python backend foundation with API, engineering, testing, debugging, and review guidance.",
+      "scope": "personal",
+      "runtime_target": "portable",
+      "allow_deprecated": false,
+      "skills": [
+        "personal/engineering/backend/python",
+        "personal/engineering/backend/core",
+        "personal/engineering/backend/api-design",
+        "personal/engineering/core",
+        "common/engineering/testing",
+        "common/engineering/debugging",
+        "common/engineering/code-review"
+      ]
+    }
+  ]
+}
