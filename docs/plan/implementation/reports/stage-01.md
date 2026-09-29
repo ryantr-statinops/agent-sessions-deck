@@ -7,7 +7,7 @@ Trạng thái: `DONE` · Phụ thuộc: Stage 00 · Handoff: Stage 02.
 - Go module `github.com/ryantr-statinops/agent-sessions-deck`, pinned Go 1.26.7 toolchain, minimal Cobra CLI, version/build metadata, `--help` and `--version`.
 - Vendored dependency tree, Makefile targets for build/check/test/integration/race/vendor/clean, and offline GitHub Actions CI with amd64 checks and arm64 compile-only coverage.
 - Linux-only fake-agent fixture with full-duplex JSONL control channel, PTY isolation, 12 deterministic modes, private temporary workspace and XDG state/config/cache homes, and process/PTY leak auditing.
-- Developer and contributor instructions; module identity recorded as matching the verified `origin`. License remains unchosen; no `LICENSE` file added.
+- Developer and contributor instructions; module identity recorded as matching verified `origin`. License was pending when Stage 01 completed; the maintainer subsequently selected MIT and added root `LICENSE`.
 
 ## Verification evidence
 
