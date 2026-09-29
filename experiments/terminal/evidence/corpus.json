@@ -1,0 +1,56 @@
+{
+  "probe": "corpus",
+  "fixture_dir": "fixtures/corpus",
+  "results": [
+    {
+      "name": "sgr_colors.ansi",
+      "passed": true,
+      "detail": "sent 91 bytes, got 91, identical=True"
+    },
+    {
+      "name": "cursor_addressing.ansi",
+      "passed": true,
+      "detail": "sent 45 bytes, got 45, identical=True"
+    },
+    {
+      "name": "erase.ansi",
+      "passed": true,
+      "detail": "sent 30 bytes, got 30, identical=True"
+    },
+    {
+      "name": "alt_screen.ansi",
+      "passed": true,
+      "detail": "sent 45 bytes, got 45, identical=True"
+    },
+    {
+      "name": "split_multibyte.ansi",
+      "passed": true,
+      "detail": "sent 91 bytes, got 91, identical=True"
+    },
+    {
+      "name": "osc.ansi",
+      "passed": true,
+      "detail": "sent 53 bytes, got 53, identical=True"
+    },
+    {
+      "name": "queries.ansi",
+      "passed": true,
+      "detail": "sent 16 bytes, got 16, identical=True"
+    },
+    {
+      "name": "bracketed_paste.ansi",
+      "passed": true,
+      "detail": "sent 39 bytes, got 39, identical=True"
+    },
+    {
+      "name": "scroll_region.ansi",
+      "passed": true,
+      "detail": "sent 16 bytes, got 16, identical=True"
+    },
+    {
+      "name": "cooked_nl",
+      "passed": true,
+      "detail": "cooked mode output ends with b'a\\r\\nb\\r\\n' (got b'a\\r\\nb\\r\\na\\r\\nb\\r\\n'): ONLCR documented"
+    }
+  ]
+}
