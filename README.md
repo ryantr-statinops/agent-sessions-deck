@@ -85,6 +85,7 @@ Khi thực thi một stage, cập nhật trạng thái trong tài liệu stage v
 - [PRODUCT.md](PRODUCT.md): ý tưởng, phạm vi sản phẩm và đặc tả kỹ thuật.
 - [Kế hoạch tổng quan](docs/plan/implementation/README.md): milestones, dependencies, kiến trúc đề xuất, rủi ro và multi-agent execution.
 - [Stage 00](docs/plan/implementation/00-product-contracts-and-spikes.md): điểm bắt đầu triển khai.
+- [.agents/AGENTS.md](.agents/AGENTS.md): quy tắc dùng skill và cách cập nhật Git subtree SKILLS.
 - [V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md): tiêu chí bàn giao V1.
 
 ## License

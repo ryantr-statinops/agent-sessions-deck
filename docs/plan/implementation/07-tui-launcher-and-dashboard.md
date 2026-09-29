@@ -32,6 +32,17 @@ Trạng thái: `PLANNED` · Milestone: M2 · Phụ thuộc: 06 · Cỡ việc: M
 - Manual QA ở ít nhất 80×24 và narrow terminal; lỗi không tràn layout và luôn có cách back/cancel/help.
 - UI không block khi Git probe chậm hoặc owner mất kết nối; cancel không spawn session muộn.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/documentation`](../../../.agents/SKILLS/common/engineering/documentation/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 UI worker giữ package TUI; coordinator review action semantics và assembly. Search helper có thể tách task bounded, không sửa runtime. Handoff cho 08 gồm view switching, dimensions, prefix help và owner/client quit routing.

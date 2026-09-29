@@ -36,6 +36,18 @@ Khởi chạy topology agent quen thuộc của một workspace bằng profile v
 5. User manual stop/rename/switch session vẫn bình thường; pause automation không kill session đang chạy.
 6. V3 acceptance report có scenario evidence, known limits và các mục ngoài scope; không claim remote orchestration/cross-platform/agent collaboration chưa xây.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/security/security-review`](../../../.agents/SKILLS/common/security/security-review/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/documentation`](../../../.agents/SKILLS/common/engineering/documentation/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Profile worker có thể làm core độc lập với MCP sau V2; automation owner cần immutable event IDs từ 13. Coordinator review idempotency/trust/partial failure. Kết thúc bằng reviewed product artifacts và acceptance report; đây là mốc hoàn chỉnh của roadmap hiện tại, các hướng mới cần scope riêng.

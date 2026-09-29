@@ -30,6 +30,17 @@ Workspace projections tại `internal/workspace/`, `internal/metrics/`, daemon p
 - Budget sampler đo được dưới workload 20 sessions, UI/input không chậm rõ vì metrics refresh.
 - Child spawn/exit lúc sampling không crash daemon; stale observation hiển thị khác current metric.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/documentation`](../../../.agents/SKILLS/common/engineering/documentation/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Metrics worker giữ sampler/proc parsing; UI worker giữ workspace view sau DTO freeze. Handoff cho 13–15 là workspace IDs, summaries, metric semantics và no-provider-semantic-event limitation.

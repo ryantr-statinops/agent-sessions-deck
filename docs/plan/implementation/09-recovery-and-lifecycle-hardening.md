@@ -34,6 +34,18 @@ Reconciliation/shutdown trong `internal/{session,process,app,ipc,store}`, bounde
 - Ignored TERM giữ truthful status, require explicit force; UI và CLI trả cùng typed error/reason.
 - Race suite + stress pass; nếu group descendants tách khỏi ownership không cleanup được, report limitation cụ thể trong release docs.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/bug-fixing`](../../../.agents/SKILLS/common/workflow/bug-fixing/SKILL.md)
+- [`common/engineering/debugging`](../../../.agents/SKILLS/common/engineering/debugging/SKILL.md)
+- [`common/agent/failure-recovery`](../../../.agents/SKILLS/common/agent/failure-recovery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Runtime owner làm lifecycle/reconciliation; reviewer viết/adapt fault cases; docs worker viết recovery từ evidence. Coordinator giữ shutdown policy chung. Handoff cho 10 gồm bug closure, fault matrix và material limitations còn lại.

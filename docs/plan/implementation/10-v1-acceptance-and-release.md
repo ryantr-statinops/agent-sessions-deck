@@ -36,6 +36,18 @@ Release build workflow, README/usage/config/provider/recovery docs, changelog, s
 
 Acceptance matrix có evidence cho mọi command và flow, không remaining blocker về process ownership, terminal input/rendering hay persistent state. Các giới hạn còn lại phải cụ thể, ví dụ session không sống qua owner shutdown ở V1; không ghi “supports all agents/terminals”. V1 không yêu cầu daemon, dedicated history command, MCP hay profiles.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/workflow/feature-delivery`](../../../.agents/SKILLS/common/workflow/feature-delivery/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/documentation`](../../../.agents/SKILLS/common/engineering/documentation/SKILL.md)
+- [`common/delivery/release`](../../../.agents/SKILLS/common/delivery/release/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 QA reviewer kiểm tra fresh-user walkthrough; docs/release worker giữ docs/artifacts; coordinator tích hợp fixes. Handoff cho 11 là tagged/identified V1 baseline, frozen client/service contract, schema versions và migration requirements. Nếu chưa publish, dùng reviewed commit/artifact identity trong report.

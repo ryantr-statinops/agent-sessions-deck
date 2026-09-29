@@ -33,6 +33,17 @@ Config nhỏ, dễ hiểu; metadata bền vững qua crash, không lost-update v
 - File permission tests và isolated home xác nhận không ghi vào state thật.
 - CLI client không có quyền ghi store độc lập khi owner đang giữ lock.
 
+## Skills tham khảo
+
+Skill là hướng dẫn thao tác; PRODUCT, quyết định đã duyệt và acceptance của stage vẫn là nguồn chuẩn. Chỉ đọc skill cần cho task và kiểm tra trạng thái trong `../../../.agents/SKILLS/data/promoted.json`.
+
+- [`common/foundation/requirements-analysis`](../../../.agents/SKILLS/common/foundation/requirements-analysis/SKILL.md)
+- [`common/engineering/testing`](../../../.agents/SKILLS/common/engineering/testing/SKILL.md)
+- [`common/engineering/code-review`](../../../.agents/SKILLS/common/engineering/code-review/SKILL.md)
+- [`common/engineering/dependency-management`](../../../.agents/SKILLS/common/engineering/dependency-management/SKILL.md)
+
+Điều phối worker Orca chỉ khi cần phối hợp Orca thật: [skill orchestration](../../../.agents/skills/orchestration/SKILL.md). Đây là discovery stub; trước lệnh Orca tải guide đúng phiên bản theo file.
+
 ## Phân công và handoff
 
 Store/config owner có thể làm độc lập sau 02; coordinator review revision/transaction semantics. Handoff cho 04–06 là config DTO, path policy, lock API và failure modes.
