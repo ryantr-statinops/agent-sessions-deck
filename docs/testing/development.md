@@ -191,12 +191,9 @@ recorded evidence; until then the honest statement is "linux/arm64 compiles".
 
 ## 10. Outstanding decisions
 
-Recorded, not decided, by this baseline:
+Current decisions and remaining verification limits:
 
-1. **License — not chosen.** The maintainer chooses the license before any
-   public release. There is deliberately **no `LICENSE` file**, and a
-   contributor must not add one. `README.md` already states the license is
-   undecided.
+1. **License — MIT selected by the maintainer after Stage 01.** The root `LICENSE` is canonical; include it in source distributions and release artifacts.
 2. **Module path verified for current origin.** `go.mod` declares `github.com/ryantr-statinops/agent-sessions-deck`, matching the inspected `origin` URL.
    If the repository is renamed or transferred, the coordinator regenerates
    `go.mod`, `go.sum` and `vendor/` together.
