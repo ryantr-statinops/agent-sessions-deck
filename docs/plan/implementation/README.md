@@ -2,7 +2,7 @@
 
 Nguồn yêu cầu: [PRODUCT.md](../../../PRODUCT.md). Ngày lập: 2026-09-28.
 
-Repo tại thời điểm lập kế hoạch chỉ có bản đặc tả sản phẩm; chưa có mã nguồn, Go module hay test. Bộ tài liệu này là kế hoạch thực thi, **không phải báo cáo các tính năng đã hoàn thành**. Tất cả stage đang ở trạng thái `PLANNED`. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
+Stage 00 đã hoàn tất contract/spike và có [báo cáo evidence](reports/stage-00.md). Stage 01 đã hoàn tất root Go module, CLI skeleton, build/test/CI baseline và fake-agent suite; xem [báo cáo evidence](reports/stage-01.md). Bộ tài liệu này là kế hoạch thực thi, **không phải báo cáo các tính năng đã hoàn thành**. Stage 00–01 `DONE`; Stage 02–15 `PLANNED`. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
 
 ## Mục tiêu và các mốc bàn giao
 
@@ -75,7 +75,7 @@ flowchart LR
 | Discover workspace chưa có nguồn cụ thể | CWD, explicit path, configured/recent workspaces; không scan toàn disk | 04 |
 | `history/workspace` trong final CLI nhưng mục V1 không yêu cầu | Basic past metadata ở V1; dedicated history ở V2; profiles ở V3 | 00, 13, 15 |
 | Terminal emulation và shortcut collision chưa đặc tả | Compatibility matrix, prefix escape, input/resize contract | 00, 08 |
-| License và Go module identity TBD | Maintainer chọn trước public release; không tự chọn quyền pháp lý | 01, 10 |
+| License chưa chọn; module path phải khớp repo identity | Module path hiện khớp origin remote; maintainer chọn license trước public release | 01, 10 |
 
 ## Bản đồ coverage
 
@@ -104,7 +104,7 @@ Mỗi stage có mục **Skills tham khảo** với skill candidates đúng công
 5. Lưu report tại `docs/plan/implementation/reports/stage-NN.md` khi stage thực sự được thực thi: thay đổi, lệnh kiểm tra, kết quả, giới hạn, quyết định mới và handoff.
 6. Cập nhật trạng thái của stage và README thành `IN_PROGRESS`, `BLOCKED` với lý do cụ thể, hoặc `DONE` có link report. Không đánh dấu xong chỉ vì có scaffolding.
 
-Không tạo report “đã hoàn thành” trong đợt lập kế hoạch này. Task phát sinh ngoài scope phải ghi dependency/scope mới trước khi tích hợp. Git branch khi cần dùng prefix `codex/`; không commit hay release nếu nhiệm vụ hiện tại chỉ yêu cầu lập kế hoạch.
+Stage 00 có report vì stage đã thực thi; chỉ tạo report `DONE` cho stage có evidence chạy thực tế. Task phát sinh ngoài scope phải ghi dependency/scope mới trước khi tích hợp. Git branch khi cần dùng prefix `codex/`; không commit hay release nếu nhiệm vụ hiện tại chỉ yêu cầu lập kế hoạch.
 
 ## Multi-agent execution
 
