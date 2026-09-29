@@ -103,9 +103,7 @@ documented rules, keep a backup, and never delete the source silently.
 
 ## Maintainer decisions and resolution status
 
-1. **License** (PRODUCT.md: `TBD`). No license is selected in this slice —
-   selecting one is a legal decision for the maintainer, required before
-   public release (Stage 10 gate). It does not block contracts or spikes.
+1. **License — MIT selected by the maintainer.** The root `LICENSE` contains the canonical notice. Preserve it in source distributions and release artifacts; changing the license requires a new maintainer decision.
 2. **Go module identity — resolved for this repository in Stage 01.** `go.mod` uses `github.com/ryantr-statinops/agent-sessions-deck`, matching verified `origin`. If renamed or transferred, update `go.mod`, `go.sum`, `vendor/` and import paths together.
 3. Exact private fallback runtime path when `XDG_RUNTIME_DIR` is unset
    (Stage 06).
