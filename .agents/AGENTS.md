@@ -15,6 +15,13 @@
 4. The plan maps a small set of candidate skills to each stage. Select only skills relevant to the work; do not load or install the entire catalog into a runtime directory just because it is vendored here.
 5. Preserve existing files and validate changes using the stage acceptance criteria.
 
+## Branch workflow
+
+- `main` is the stable integration branch; do not make routine implementation commits directly on it.
+- `dev` is the persistent shared working branch, tracked as `origin/dev`. Start project work on `dev`, and commit and push ongoing changes there.
+- Merge `dev` into `main` through a pull request after the relevant checks pass. Keep the `dev` branch; do not delete it after a merge.
+- After a merge, fast-forward `dev` to the updated `main` before starting the next work cycle.
+
 ## Updating the vendored library
 
 Update the subtree intentionally from its upstream `main` branch:
