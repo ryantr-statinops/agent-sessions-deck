@@ -23,7 +23,7 @@ Dự án đã hoàn tất Stage 00 và Stage 01; Stage 02 hiện là stage kế 
 | Mã nguồn, Go module, build và tests | Stage 01 baseline được nghiệm thu; session/product features chưa triển khai |
 | Bản phát hành có thể cài đặt | Chưa có |
 
-Repo có tài liệu sản phẩm, Stage 00 terminal evidence và Stage 01 build/test/CI/fake-agent baseline. Tính năng session chưa triển khai; chưa có binary phát hành. License chưa được maintainer chọn.
+Repo có tài liệu sản phẩm, Stage 00 terminal evidence và Stage 01 build/test/CI/fake-agent baseline. Tính năng session chưa triển khai; chưa có binary phát hành. License MIT đã được chọn.
 
 ## Mục tiêu sản phẩm
 
@@ -75,7 +75,7 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 [Stage 01](docs/plan/implementation/01-repository-and-engineering-baseline.md) đã hoàn tất; xem [báo cáo evidence](docs/plan/implementation/reports/stage-01.md). Stage kế tiếp là Stage 02 (`PLANNED`).
 
 1. Thực thi Stage 02: domain và application contracts.
-2. Chốt license trước khi public release; hiện chưa thêm `LICENSE` theo quyết định ghi nhận.
+2. Giữ file `LICENSE` và thông báo bản quyền MIT trong artifacts phát hành.
 3. Giữ các gate Stage 03/05/06/08/10: state durability, PTY runtime, IPC, shortcut UX và agent compatibility.
 
 Chỉ đánh dấu stage hoàn tất khi acceptance đạt và report evidence đã lưu.
@@ -92,4 +92,4 @@ Chỉ đánh dấu stage hoàn tất khi acceptance đạt và report evidence �
 
 ## License
 
-Chưa chọn license. Quyết định license nằm trong kế hoạch và cần được chốt trước khi phát hành public.
+License MIT; xem [LICENSE](LICENSE).
