@@ -12,18 +12,18 @@ ASD chạy các công cụ coding agent thực tế, như Claude Code, Codex CLI
 
 ## Trạng thái hiện tại
 
-**Dự án đang ở giai đoạn lập kế hoạch, trước khi triển khai Stage 00.**
+Dự án đã hoàn tất Stage 00 và Stage 01; Stage 02 hiện là stage kế tiếp đã lên kế hoạch.
 
 | Hạng mục | Trạng thái |
 |---|---|
 | Đặc tả sản phẩm | Đã có bản draft trong [PRODUCT.md](PRODUCT.md) |
 | Kế hoạch triển khai | Đã có 16 stage trong [docs/plan/implementation/](docs/plan/implementation/README.md) |
-| Stage thực thi đã hoàn thành | 0/16; tất cả đang ở trạng thái `PLANNED` |
-| Stage tiếp theo | [Stage 00 — Product contracts và technical spikes](docs/plan/implementation/00-product-contracts-and-spikes.md) |
-| Mã nguồn, Go module, build và tests | Chưa triển khai |
+| Stage thực thi đã hoàn thành | 2/16; Stage 00 `DONE`, Stage 01 `DONE`, Stage 02–15 `PLANNED` |
+| Stage tiếp theo | [Stage 02 — Domain và application contracts](docs/plan/implementation/02-domain-and-application-contracts.md) (`PLANNED`) |
+| Mã nguồn, Go module, build và tests | Stage 01 baseline được nghiệm thu; session/product features chưa triển khai |
 | Bản phát hành có thể cài đặt | Chưa có |
 
-Hiện repo chứa tài liệu sản phẩm và kế hoạch. Command `asd`, các tính năng và stack bên dưới là mục tiêu triển khai; chưa có binary hoặc hướng dẫn chạy ứng dụng ở thời điểm này.
+Repo có tài liệu sản phẩm, Stage 00 terminal evidence và Stage 01 build/test/CI/fake-agent baseline. Tính năng session chưa triển khai; chưa có binary phát hành. License MIT đã được chọn.
 
 ## Mục tiêu sản phẩm
 
@@ -52,7 +52,7 @@ ASD chỉ quản lý session do ASD khởi tạo; V1 không tìm và kết nối
 | Runtime V1 | Foreground owner và Unix socket local cho các CLI client |
 | Runtime V2 | Daemon `agentd`, để session tiếp tục chạy khi đóng TUI |
 
-Các lựa chọn cụ thể, library versions và lifecycle semantics sẽ được chốt sau kiểm chứng kỹ thuật ở Stage 00. Thiết kế đề xuất được giải thích trong [kế hoạch tổng quan](docs/plan/implementation/README.md#quyết-định-kiến-trúc-đề-xuất).
+Stage 00 ghi các contract và lựa chọn kỹ thuật dưới dạng đề xuất có evidence; chúng chưa phải product fact được maintainer phê duyệt. Xem [báo cáo Stage 00](docs/plan/implementation/reports/stage-00.md) và [kế hoạch tổng quan](docs/plan/implementation/README.md#quyết-định-kiến-trúc-đề-xuất).
 
 Ở V1, session phụ thuộc vào tiến trình foreground sở hữu PTY. Khi đóng owner vẫn còn session sống, giao diện phải cho người dùng quyết định xử lý chúng. V2 bổ sung daemon để tách lifetime của session khỏi TUI; daemon vẫn phải đang hoạt động để giữ PTY.
 
@@ -72,22 +72,24 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 
 ## Bước triển khai tiếp theo
 
-[Stage 00](docs/plan/implementation/00-product-contracts-and-spikes.md) tập trung vào ba việc trước khi viết tính năng production:
+[Stage 01](docs/plan/implementation/01-repository-and-engineering-baseline.md) đã hoàn tất; xem [báo cáo evidence](docs/plan/implementation/reports/stage-01.md). Stage kế tiếp là Stage 02 (`PLANNED`).
 
-1. Chốt contract cho session lifecycle, process ownership, CLI và storage.
-2. Kiểm chứng PTY, terminal rendering, input/resize và việc chuyển giữa nhiều session.
-3. Ghi quyết định kiến trúc và bằng chứng kiểm thử làm đầu vào cho các stage tiếp theo.
+1. Thực thi Stage 02: domain và application contracts.
+2. Giữ file `LICENSE` và thông báo bản quyền MIT trong artifacts phát hành.
+3. Giữ các gate Stage 03/05/06/08/10: state durability, PTY runtime, IPC, shortcut UX và agent compatibility.
 
-Khi thực thi một stage, cập nhật trạng thái trong tài liệu stage và kế hoạch tổng quan, lưu report có bằng chứng, rồi cập nhật mục **Trạng thái hiện tại** của README này. Chỉ đánh dấu hoàn thành khi đạt tiêu chí nghiệm thu.
+Chỉ đánh dấu stage hoàn tất khi acceptance đạt và report evidence đã lưu.
 
 ## Tài liệu
 
 - [PRODUCT.md](PRODUCT.md): ý tưởng, phạm vi sản phẩm và đặc tả kỹ thuật.
 - [Kế hoạch tổng quan](docs/plan/implementation/README.md): milestones, dependencies, kiến trúc đề xuất, rủi ro và multi-agent execution.
-- [Stage 00](docs/plan/implementation/00-product-contracts-and-spikes.md): điểm bắt đầu triển khai.
+- [Stage 00](docs/plan/implementation/00-product-contracts-and-spikes.md): contract/spike hoàn tất; [report](docs/plan/implementation/reports/stage-00.md).
+- [Contributing](CONTRIBUTING.md): ownership và cách làm việc trong repo.
+- [Development/testing](docs/testing/development.md): prerequisites, Makefile targets, CI và fake-agent contract.
 - [.agents/AGENTS.md](.agents/AGENTS.md): quy tắc dùng skill và cách cập nhật Git subtree SKILLS.
 - [V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md): tiêu chí bàn giao V1.
 
 ## License
 
-Chưa chọn license. Quyết định license nằm trong kế hoạch và cần được chốt trước khi phát hành public.
+License MIT; xem [LICENSE](LICENSE).

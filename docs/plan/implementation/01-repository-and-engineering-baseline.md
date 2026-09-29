@@ -1,6 +1,6 @@
 # Stage 01 — Repository và engineering baseline
 
-Trạng thái: `PLANNED` · Milestone: M0 · Phụ thuộc: 00 · Cỡ việc: S.
+Trạng thái: `DONE` · Milestone: M0 · Phụ thuộc: 00 · Cỡ việc: S. Evidence: [báo cáo Stage 01](reports/stage-01.md).
 
 ## Mục tiêu
 
@@ -12,16 +12,16 @@ Có nền Go build/test và fixture độc lập với vendor để các stage s
 
 ## Checklist thực thi
 
-- [ ] Chọn module path theo repo identity đã xác minh; không dùng GitHub organization giả. Pin Go/toolchain và versions từ ADR 00.
-- [ ] Dựng `cmd/asd/main.go` nhỏ, composition tại `internal/app`; compile Linux amd64 và arm64.
-- [ ] Thêm targets `build`, `test`, `test-integration`, `lint`, `fmt`, `clean`; integration có timeout và cleanup.
-- [ ] CI chạy formatting, `go vet`, unit/integration phù hợp và race suite trên Linux; dependency cache không chứa config/credentials.
-- [ ] Viết fake agent có modes: echo/line-input, ANSI full-screen, exit code, slow-start, ignored TERM, child/grandchild, output flood, Unicode, terminal query và size report.
-- [ ] Fixture dùng control pipe/handshake thay cho sleeps cố định; tạo workspace/state home tạm cho mỗi test.
-- [ ] Test cleanup theo identity fixture; không dùng `pkill` theo executable name.
-- [ ] Thêm version/build metadata và `asd --help`/`--version` tối thiểu; command khác triển khai ở 06.
-- [ ] Viết setup/dev instructions; nêu Linux-only và nhu cầu TTY của integration.
-- [ ] Ghi module/license decisions còn chờ; chỉ thêm LICENSE khi maintainer đã chọn.
+- [x] Chọn module path theo repo identity đã xác minh; pin Go/toolchain và versions từ ADR 00.
+- [x] Dựng `cmd/asd/main.go` nhỏ, composition tại `internal/app`; compile Linux amd64 và arm64.
+- [x] Thêm targets `build`, `test`, `test-integration`, `lint`, `fmt`, `clean`; integration có timeout và cleanup.
+- [x] CI chạy formatting, `go vet`, unit/integration và race suite trên Linux; dependency cache không chứa config/credentials.
+- [x] Viết fake agent có 12 modes: echo/line-input, ANSI full-screen, exit code, slow-start, ignored TERM, child/grandchild, output flood, Unicode, terminal query và size report.
+- [x] Fixture dùng control pipe/handshake thay cho sleeps cố định; mỗi fixture có workspace/state home tạm.
+- [x] Test cleanup theo process start-time/fixture identity và PTY identity; không dùng `pkill` theo executable name.
+- [x] Thêm version/build metadata và `asd --help`/`--version` tối thiểu; command khác triển khai ở 06.
+- [x] Viết setup/dev instructions; nêu Linux-only và nhu cầu TTY của integration.
+- [x] Ghi module/license decisions: module path khớp `origin`; maintainer đã chọn MIT sau Stage 01 và thêm root `LICENSE`.
 
 ## Ngoài phạm vi
 

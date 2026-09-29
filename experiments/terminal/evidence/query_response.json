@@ -1,0 +1,26 @@
+{
+  "probe": "query_response",
+  "expectation": "no replies without a terminal emulator",
+  "results": [
+    {
+      "name": "DA_primary",
+      "passed": true,
+      "detail": "sent b'\\x1b[c', echoBytes=3, extraBytes=b''"
+    },
+    {
+      "name": "DA_secondary",
+      "passed": true,
+      "detail": "sent b'\\x1b[>c', echoBytes=4, extraBytes=b''"
+    },
+    {
+      "name": "DSR_cursor",
+      "passed": true,
+      "detail": "sent b'\\x1b[6n', echoBytes=4, extraBytes=b''"
+    },
+    {
+      "name": "DECRQM_bracketed_paste",
+      "passed": true,
+      "detail": "sent b'\\x1b[?2004$p', echoBytes=9, extraBytes=b''"
+    }
+  ]
+}
