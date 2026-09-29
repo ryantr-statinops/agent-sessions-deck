@@ -126,14 +126,11 @@ assumptions you relied on.
   in your environment, say so explicitly in the handoff rather than claiming a
   pass.
 
-## 8. Open decisions
+## 8. Recorded project decisions
 
-These are deliberately unresolved. Do not "fix" them in passing, and do not
-add a `LICENSE` file until the maintainer chooses one.
+License và module identity là quyết định đã ghi nhận; không thay đổi chúng ngoài phạm vi được giao.
 
-- **License: not chosen.** The maintainer decides the license before any
-  public release. There is intentionally no `LICENSE` file in the repository
-  yet, and none may be added by a contributor.
+- **License: MIT.** Copyright notice là Ryan Tran; giữ root `LICENSE` nguyên vẹn trong source và release artifacts.
 - **Module path verified for the current remote.** `go.mod` uses `github.com/ryantr-statinops/agent-sessions-deck`, matching the inspected `origin` URL. If the repository is renamed or transferred, the coordinator must regenerate `go.mod`, `go.sum` and `vendor/` together. The Makefile derives linker symbol paths from `go list -m`.
 
 ## 9. Where to look next
