@@ -382,6 +382,20 @@ func newFixture(opt options) (*fixture, error) {
 	if _, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), syscall.F_GETFD, 0); errno != 0 {
 		return nil, fmt.Errorf("control descriptor %d is not open: %v", control.ControlFD, errno)
 	}
+	sockType, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_TYPE)
+	if err != nil {
+		return nil, fmt.Errorf("control descriptor %d is not a socket: %w", fd, err)
+	}
+	if sockType != syscall.SOCK_STREAM {
+		return nil, fmt.Errorf("control descriptor %d must be a stream socket", fd)
+	}
+	sockAddr, err := syscall.Getsockname(fd)
+	if err != nil {
+		return nil, fmt.Errorf("control descriptor %d has no socket address: %w", fd, err)
+	}
+	if _, ok := sockAddr.(*syscall.SockaddrUnix); !ok {
+		return nil, fmt.Errorf("control descriptor %d must be an AF_UNIX socket", fd)
+	}
 	file := os.NewFile(uintptr(fd), "control")
 	// The control channel belongs to this process only. Descendants get their
 	// own inherited descriptors, so mark it close-on-exec.
