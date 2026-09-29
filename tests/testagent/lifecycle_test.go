@@ -317,16 +317,22 @@ func TestExitByRequestedStatus(t *testing.T) {
 	}
 }
 
-// TestFixtureRejectsUnusableControlChannel proves the fixture fails loudly when
-// its control channel is absent, rather than hanging on a terminal.
+// TestFixtureRejectsUnusableControlChannel proves fd 3 must be a socket rather
+// than merely an inherited open descriptor.
 func TestFixtureRejectsUnusableControlChannel(t *testing.T) {
 	cmd := exec.Command(fixtureBin, "--mode=echo", "--label=orphan")
 	isolateFixtureCommand(t, cmd)
 	cmd.Stdin = strings.NewReader("")
+	controlFile, err := os.CreateTemp(t.TempDir(), "not-control-")
+	if err != nil {
+		t.Fatalf("create invalid control descriptor: %v", err)
+	}
+	defer controlFile.Close()
+	cmd.ExtraFiles = []*os.File{controlFile}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	err := cmd.Run()
+	err = cmd.Run()
 	if err == nil {
 		t.Fatalf("fixture without a control channel exited successfully: %s", out.String())
 	}
