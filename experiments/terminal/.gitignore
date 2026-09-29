@@ -1,0 +1,4 @@
+# Spike-local runtime residue (regenerated; never merge-worthy).
+.run/
+__pycache__/
+*.pyc
