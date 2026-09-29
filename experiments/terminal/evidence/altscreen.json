@@ -1,0 +1,35 @@
+{
+  "probe": "altscreen",
+  "results": [
+    {
+      "name": "smcup",
+      "passed": true,
+      "detail": "sent 17 bytes, got 17 back, identical=True"
+    },
+    {
+      "name": "rmcup",
+      "passed": true,
+      "detail": "sent 17 bytes, got 17 back, identical=True"
+    },
+    {
+      "name": "cup_10_20",
+      "passed": true,
+      "detail": "sent 8 bytes, got 8 back, identical=True"
+    },
+    {
+      "name": "ed_full",
+      "passed": true,
+      "detail": "sent 4 bytes, got 4 back, identical=True"
+    },
+    {
+      "name": "el_line",
+      "passed": true,
+      "detail": "sent 4 bytes, got 4 back, identical=True"
+    },
+    {
+      "name": "cup_then_text",
+      "passed": true,
+      "detail": "sent 11 bytes, got 11 back, identical=True"
+    }
+  ]
+}
