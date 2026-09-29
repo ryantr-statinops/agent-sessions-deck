@@ -8,7 +8,7 @@
 **Primary language:** Go  
 **Target platform:** Linux first  
 **Interface:** CLI app with TUI  
-**License:** TBD — open maintainer decision required before public release (see `docs/architecture/adr/0003-state-and-storage.md`); no license is assumed by this draft.
+**License:** MIT (see `LICENSE`), selected by the maintainer.
 
 ---
 
