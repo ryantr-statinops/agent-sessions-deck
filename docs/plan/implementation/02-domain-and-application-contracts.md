@@ -1,6 +1,6 @@
 # Stage 02 — Domain và application contracts
 
-Trạng thái: `PLANNED` · Milestone: M1 · Phụ thuộc: 01 · Cỡ việc: M.
+Trạng thái: `DONE` · Milestone: M1 · Phụ thuộc: 01 · Cỡ việc: M.
 
 ## Mục tiêu
 
@@ -12,17 +12,17 @@ Một model và application service thống nhất dùng được từ CLI, TUI,
 
 ## Checklist thực thi
 
-- [ ] Định nghĩa logical Session với ID/name/agent/workspace, và Attempt với generation, immutable resolved command, timestamps, exit reason, process identity.
-- [ ] ProcessIdentity gồm PID, PGID, boot ID, process start ticks và owner instance ID; PTY handle chỉ trong memory, không serialize file descriptor.
-- [ ] Tách Lifecycle, Attachment và Activity theo ADR; trạng thái unknown không bị tự đổi thành exited chỉ bởi probe fail.
-- [ ] Viết transition reducer cho Created → Starting → Running → Stopping → Exited/Failed; Running + I/O unavailable tạo orphan annotation; restart giữ session ID tăng attempt generation.
-- [ ] DTO snapshot phân biệt persisted observation và live authoritative observation, gồm revision và observed timestamp.
-- [ ] Port contracts cho ProviderRegistry, WorkspaceResolver, SessionStore, ProcessRuntime, TerminalSubscription và application client.
-- [ ] Application use cases: scan/list/get/create/open/detach/rename/restart/stop/kill; delete metadata chỉ khi không active, có contract dù chưa có CLI riêng.
-- [ ] Capabilities phân biệt ASD core lifecycle với native vendor list/log/resume. Unsupported capability trả typed error.
-- [ ] Error taxonomy bao phủ PRODUCT và bổ sung `OWNER_UNAVAILABLE`, `CONFLICT`, `STALE_ATTEMPT`, `NOT_INTERACTIVE`, `CORRUPT_STATE` khi cần.
-- [ ] Metadata events có ID, type, session/attempt, revision, timestamp; không chứa raw terminal bytes hay environment secrets.
-- [ ] Chốt concurrency: per-session serialized lifecycle, owner-level store transactions, exactly-one waiter cho mỗi child, generation fencing cho callbacks.
+- [x] Định nghĩa logical Session với ID/name/agent/workspace, và Attempt với generation, immutable resolved command, timestamps, exit reason, process identity.
+- [x] ProcessIdentity gồm PID, PGID, boot ID, process start ticks và owner instance ID; PTY handle chỉ trong memory, không serialize file descriptor.
+- [x] Tách Lifecycle, Attachment và Activity theo ADR; unknown không bị đổi thành exited chỉ bởi probe fail.
+- [x] Reducer T1–T20; orphan là annotation trên running + unavailable; restart giữ Session ID và tăng attempt generation.
+- [x] DTO phân biệt persisted và live authoritative observations, có revision và observed timestamp.
+- [x] Ports cho ProviderRegistry, WorkspaceResolver, SessionStore, ProcessRuntime, TerminalSubscription và application client.
+- [x] Application use cases gồm scan/list/get/create/open/detach/rename/restart/stop/kill/delete/report; delete chỉ metadata khi session không active.
+- [x] Capabilities tách ASD core lifecycle khỏi native vendor list/log/resume; unsupported trả typed error.
+- [x] Error taxonomy bao phủ PRODUCT và typed `OWNER_UNAVAILABLE`, `CONFLICT`, `STALE_ATTEMPT`, `NOT_INTERACTIVE`, `CORRUPT_STATE`.
+- [x] Metadata events có ID/type/session/attempt/revision/timestamp, không chứa raw terminal bytes hoặc environment secrets.
+- [x] Owner-wide serialized mutations, store transactions, một exit waiter/child, generation fencing cho callbacks.
 
 ## Acceptance và verification
 
@@ -30,6 +30,11 @@ Một model và application service thống nhất dùng được từ CLI, TUI,
 - Mock ports chứng minh use case không phụ thuộc terminal framework hoặc transport.
 - Natural nonzero exit khác launch failure; stop timeout không tự trở thành “killed”.
 - Events có ordering/revision rõ; subscriber chậm không giữ lock lifecycle và policy overflow đã mô tả.
+## Kết quả và handoff
+
+Implementation và verification được ghi tại [báo cáo Stage 02](reports/stage-02.md). Durable JSON dùng `snake_case` cho các nested `Reason`, `ProcessIdentity` và `Evidence`; Stage 03 phải đặt schema version và migration quanh wire shape này. `unknown` yêu cầu ProcessIdentity; probe T15/T18 trước khi có identity bị từ chối, giữ `starting` để T2 quyết định. T6 nhận `natural-exit` hoặc `killed` từ reap đã xác nhận; không nhận reason T8/T16/T17.
+
+Scope giới hạn theo Stage 02: không thêm production process/PTY/store backend. Stage 05/09 sở hữu process runtime, wait/reconciliation và crash recovery; Stage 03 sở hữu persistent store/schema migration; Stage 06 phải hoàn thiện request-ID dedup theo ADR 0003 và thêm `Report` vào client surface. Review handoff còn lại (import-boundary guard cho `events`, concurrent observer consistency, create-after-spawn invariant-failure path, và FD/goroutine leak evidence) nằm trong report.
 
 ## Skills tham khảo
 
