@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"fmt"
@@ -13,8 +13,8 @@ var (
 	buildDate    = "unknown"
 )
 
-// Execute runs the V1 root command and returns a process exit code.
-func Execute(args []string, stdout, stderr io.Writer) int {
+// execute runs the V1 root command and returns a process exit code.
+func execute(args []string, stdout, stderr io.Writer) int {
 	root := newRootCommand(stdout, stderr)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {

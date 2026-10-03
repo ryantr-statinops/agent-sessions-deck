@@ -2,7 +2,7 @@
 
 Nguồn yêu cầu: [PRODUCT.md](../../../PRODUCT.md). Ngày lập: 2026-09-28.
 
-Stage 00 đã hoàn tất contract/spike và có [báo cáo evidence](reports/stage-00.md). Stage 01 đã hoàn tất root Go module, CLI skeleton, build/test/CI baseline và fake-agent suite; xem [báo cáo evidence](reports/stage-01.md). Bộ tài liệu này là kế hoạch thực thi, **không phải báo cáo các tính năng đã hoàn thành**. Stage 00–01 `DONE`; Stage 02–15 `PLANNED`. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
+Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 01 đã hoàn tất engineering baseline ([report](reports/stage-01.md)); Stage 02 `DONE` ([report](reports/stage-02.md)). Stage 03–15 vẫn `PLANNED`. Đây là kế hoạch triển khai, không phải báo cáo tính năng đã hoàn tất. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
 
 ## Mục tiêu và các mốc bàn giao
 
