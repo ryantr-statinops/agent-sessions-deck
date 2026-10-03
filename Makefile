@@ -27,19 +27,18 @@ UNIT_TIMEOUT ?= 5m
 INTEGRATION_TIMEOUT ?= 10m
 RACE_TIMEOUT ?= 15m
 
-# Build metadata. `internal/app` declares buildVersion, buildCommit and
+# Build metadata. `cmd/asd` declares buildVersion, buildCommit and
 # buildDate; the module path is read from go.mod so this stays correct if the
 # module identity is renamed.
 MODULE := $(shell $(GO) list -m 2>/dev/null)
-APP_PKG := $(MODULE)/internal/app
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 SOURCE_DATE_EPOCH ?=
 DATE ?= $(shell if [ -n "$(SOURCE_DATE_EPOCH)" ]; then date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown; else date -u +%Y-%m-%dT%H:%M:%SZ; fi)
 LDFLAGS ?= -s -w \
-	-X $(APP_PKG).buildVersion=$(VERSION) \
-	-X $(APP_PKG).buildCommit=$(COMMIT) \
-	-X $(APP_PKG).buildDate=$(DATE)
+	-X main.buildVersion=$(VERSION) \
+	-X main.buildCommit=$(COMMIT) \
+	-X main.buildDate=$(DATE)
 
 # Package directories for gofmt and for the integration-tag probe. The
 # integration tag is included so packages that hold *only* integration-tagged
