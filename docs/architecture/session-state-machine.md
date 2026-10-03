@@ -1,9 +1,6 @@
 # Session state machine (Stage 00 contract)
 
-Status: **Proposed**. This is the Stage 00 transition contract that Stage 02
-reduces to a tested reducer and Stages 05/09 execute. Terms are defined in
-`glossary.md`; ownership and storage rules live in `adr/0001-…` and
-`adr/0003-…`.
+Status: **Frozen for Stage 02**. Stage 00 established this transition contract; Stage 02 implements and tests the reducer. Stages 05/09 execute process ownership and crash reconciliation. Terms are defined in `glossary.md`; ownership and storage rules live in `adr/0001-…` and `adr/0003-…`.
 
 ## The three axes (normative)
 
@@ -24,8 +21,7 @@ created → starting → running → stopping → exited | failed
   stop-induced).
 - `failed`: launch failed, restart precondition failed, or runtime fault
   (never a bare string — always with a reason).
-- `unknown`: liveness could not be established (probe timeout, permission
-  denied, unverifiable identity). `unknown` never auto-converts to `exited`.
+- `unknown`: liveness could not be established for a captured identity (probe timeout or permission denied). `unknown` never auto-converts to `exited`; an attempt without identity remains `starting` until T2 returns a spawn result.
 
 **Attachment (I/O)** — whether ASD can show the session now:
 
@@ -63,7 +59,7 @@ removed by this contract.
 | T3 | `starting` | spawn succeeds, identity captured, persisted | `running` + `detached` | Persist-then-run ordering per Stage 05 launch transaction. |
 | T4 | `starting` | spawn fails (bad executable, cwd invalid, PTY setup error) | `failed` | `launch-failed`; no invisible child may remain. |
 | T5 | `starting` / `running` | persist-after-spawn fails | `failed` + cleanup | Child is killed **only** via verified identity, then `launch-failed: store-error`. |
-| T6 | `running` | child exits naturally (any code incl. nonzero) | `exited` | Nonzero exit is `exited` with `exit-code: N`, not `failed` and not a launch failure. Drain trailing output first. |
+| T6 | `running` | child exits naturally, or runtime reports a confirmed reap after an explicit kill | `exited` | Natural exits retain `natural-exit` (any code); a late confirmed kill reap retains `killed`. T6 rejects T8 stop and T16/T17 reconciliation reasons. Drain trailing output first. |
 | T7 | `running` | `stop` requested | `stopping` | Graceful signal to the **verified owned group**; start timeout. |
 | T8 | `stopping` | child exits within timeout | `exited` | Reason `stopped` (distinguishes from natural exit and from kill). |
 | T9 | `stopping` | timeout, child still alive | `running` | Return to `running` with a `stop-timeout` note + kill guidance. Never auto-escalate to SIGKILL. |
@@ -71,11 +67,11 @@ removed by this contract.
 | T11 | any active | `restart` requested on a live Attempt | serialize stop → verify exit → new Attempt | Restarting a running Attempt needs explicit `--force`/confirmation; never two concurrent Attempts. New Attempt re-resolves argv in the same workspace; vendor conversation resume is **not** implied. |
 | T12 | `exited` / `failed` | `restart` requested | new Attempt at `starting`, same Session ID | Generation bumps; old Attempt's exit reason is immutable history. |
 | T13 | `exited` / `failed` | restart precondition fails | `failed` (new Attempt) | Reason `restart-failed`; the prior Attempt record is untouched. |
-| T14 | `running` | PTY lost, process verified alive | `running` + `unavailable`, annotated **orphaned** | `open` returns `SESSION_IO_FAILED` with guidance; the process is not signalled. |
+| T14 | `running` / `stopping` | PTY lost, process verified alive | `running` / `stopping` + `unavailable` | Annotate **orphaned** only for `running`; a `stopping` attempt remains stopping without the orphan note. Process is not signalled. |
 | T15 | `running` | PTY lost, liveness unverifiable | `unknown` + `unavailable` | Preserve raw observations; no auto-kill, no auto-adopt. |
 | T16 | `running` (stored) | owner restarts, PID missing | `exited` | Reason `dead: process gone`; reconciliation evidence recorded. |
 | T17 | `running` (stored) | owner restarts, PID present but identity mismatches (starttime/boot/owner differ) | `exited` (old observation closed) | The old Attempt ends as stale; the live PID is **not** adopted and never signalled. |
-| T18 | any | liveness probe times out / permission denied | `unknown` | With reason (`probe-timeout`, `permission-denied`); a failed probe never fabricates `exited`. |
+| T18 | any active Attempt with a captured ProcessIdentity | liveness probe times out / permission denied | `unknown` | Record the reason; a failed probe never fabricates `exited`. A `starting` Attempt without identity is not probeable: refuse T18 and wait for the T2 spawn result. |
 | T19 | any active | stale callback from an older generation arrives | ignored | Generation check drops it; current Attempt untouched (Stage 02/05 tests). |
 | T20 | any | metadata delete requested while lifecycle active | rejected | `CONFLICT`: delete requires `exited`/`failed` first (CLI contract). |
 
@@ -97,8 +93,7 @@ removed by this contract.
    classifies what `Wait` has not (yet) reported.
 2. No signal without verified ProcessIdentity (PID + starttime + boot ID +
    owner instance). PID alone, or name matching, never authorizes a signal.
-3. `unknown` is sticky until real evidence arrives — never decays into
-   `exited` on a timer.
+3. `unknown` requires a captured ProcessIdentity and is sticky until real evidence arrives — never decays into `exited` on a timer.
 4. Crash recovery classifies persisted `running` into exactly one of
    `exited` (T16), stale-closed (T17), `orphaned` (T14), or `unknown`
    (T15/T18). It never recreates a PTY, never auto-restarts, never auto-kills.

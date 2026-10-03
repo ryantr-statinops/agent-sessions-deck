@@ -1,9 +1,6 @@
-# ASD Glossary (Stage 00 contract slice)
+# ASD Glossary (Stage 02 domain contract)
 
-Status: **Proposed** · Scope: Stage 00 only. These definitions are contract
-proposals for Stage 02+ to freeze, not already-approved product facts. Where a
-term differs from the current PRODUCT.md draft, the difference is marked
-`[PRODUCT-DELTA]` with a pointer to the ADR that justifies it.
+Status: **Frozen for Stage 02** · Scope: shared domain/application vocabulary. Later stages supply runtime, persistence and CLI implementations. Terms diverging from PRODUCT.md remain marked `[PRODUCT-DELTA]` with an ADR pointer.
 
 ## Agent
 
