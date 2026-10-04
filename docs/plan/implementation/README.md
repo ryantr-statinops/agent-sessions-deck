@@ -47,7 +47,7 @@ Các quyết định dưới đây là **đề xuất để chốt tại Stage 0
 4. **Restart khác native resume.** Restart tạo execution attempt mới trong cùng logical session, chạy lại argv trong workspace; không tự nối tiếp conversation của vendor. `Resume` capability chỉ bật khi có adapter và bằng chứng tương ứng.
 5. **Không suy luận IDLE từ im lặng.** Process lifecycle (`created/starting/running/stopping/exited/failed/unknown`) tách khỏi I/O (`attached/detached/unavailable`) và activity (`unknown/working/idle` khi provider có bằng chứng). ORPHANED là nhãn cho process còn sống nhưng PTY mất; giữ dữ kiện gốc khi trạng thái chưa xác minh.
 6. **Single writer cho metadata.** Owner serialize mutations, có lock toàn bộ state home; CLI client không ghi JSON trực tiếp khi owner sống. Mỗi mutation có generation/revision và request ID nếu có khả năng retry.
-7. **Linux trước.** Go + Cobra; Bubble Tea/Bubbles/Lip Gloss theo bộ major tương thích được pin tại Stage 01; PTY candidate `creack/pty`; Git CLI; JSON ở V1. Chỉ thêm SQLite ở Stage 13 nếu có nhu cầu và quyết định đo được. Không tạo `pkg/api` public sớm.
+7. **Linux trước.** Go + Cobra; `creack/pty` đã được thêm vào module dự án. `charmbracelet/x/vt` mới là spike-only pseudo-version chưa tagged; Bubble Tea/Bubbles/Lip Gloss chưa được pin tại Stage 01. Coordinator phải chốt dependency bằng evidence và cập nhật `go.mod`/`go.sum`/`vendor` trước khi Stage 07/08 triển khai.
 8. **State/config/runtime tách nhau theo XDG.** Đề xuất `~/.config/asd/config.yaml`, `~/.local/state/asd/{sessions,state}.json`, `$XDG_RUNTIME_DIR/asd/control.sock`. Nếu thay đổi vị trí mẫu trong PRODUCT, phải ghi ADR và hướng dẫn migration; không âm thầm bỏ qua dữ liệu cũ.
 
 ```mermaid
@@ -106,17 +106,66 @@ Mỗi stage có mục **Skills tham khảo** với skill candidates đúng công
 
 Stage 00 có report vì stage đã thực thi; chỉ tạo report `DONE` cho stage có evidence chạy thực tế. Task phát sinh ngoài scope phải ghi dependency/scope mới trước khi tích hợp. Git branch khi cần dùng prefix `codex/`; không commit hay release nếu nhiệm vụ hiện tại chỉ yêu cầu lập kế hoạch.
 
-## Multi-agent execution
+## Orchestration theo phiên và DAG thực thi
 
-Giới hạn đề xuất: một coordinator + tối đa ba worker. Với runtime hỗ trợ ít slot hơn, giảm worker; không tạo worker để chờ dependency. Có thể thực thi cả plan bằng một agent.
+Mục này là policy thực thi roadmap bằng Orca; không biến Orca, OMP hay một coding agent cụ thể thành dependency của sản phẩm/tests.
 
-- Wave A: Stage 00 do một owner, reviewer độc lập xem ownership/lifecycle và terminal spike; Stage 01 tiếp sau.
-- Wave B: Stage 02 chốt hợp đồng, Stage 03 chốt store; sau đó Stage 04 và 05 song song, reviewer làm fault-case matrix.
-- Wave C: Stage 06 tích hợp; Stage 07 owner UI. Worker terminal có thể chuẩn bị adapter theo contract Stage 00/05, nhưng Stage 08 chỉ hoàn tất sau 07.
-- Wave D: Stage 09 làm runtime/recovery; worker docs/release chuẩn bị Stage 10 sau khi command surface ổn định. Release chỉ khi 09 pass.
-- Wave E: Stage 11 trước; Stage 12 và 13 có thể song song khi event schema đã freeze. Stage 14 và phần profile core của 15 song song sau V2; expose profile qua MCP sau 14.
+### Vai trò và source of truth
 
-Coordinator sở hữu `go.mod/go.sum`, `cmd/asd/main.go`, assembly ứng dụng, hợp đồng shared và tích hợp cuối. Worker không cùng sửa shared file: gửi yêu cầu dependency/API cho coordinator. Runtime owner giữ `internal/{process,pty,terminal,session}`; discovery owner giữ `internal/{providers,discovery,workspace,git}`; UI owner giữ `internal/{cli,tui}` theo task. Mỗi handoff nêu file sửa, command đã chạy, failure còn lại và API assumptions. Không hard-code Orca hoặc một coding agent thành dependency của sản phẩm/test.
+- **OMP coordinator:** làm việc với user, tạo Run/Task DAG, đóng băng shared contracts, gán ownership, tích hợp và xác nhận evidence. Coordinator giữ `go.mod`/`go.sum`, application assembly, shared APIs và commit/push theo repo rules.
+- **Orca:** lưu Run/Task/Dispatch, dependency, mailbox và worker-resource/liveness. Orca dispatch Task nhưng không tự suy ra dependency, model hay số slot rảnh.
+- **Worker:** làm đúng một Task self-contained với Target/Change/Constraints/Ownership/Observable acceptance. Worker không sửa shared contract ngoài scope, tự mở rộng Task, tự fallback agent/model hoặc push/merge branch.
+
+OMP là coordinator trong terminal hiện tại; `omp` không phải agent ID trong `worker-start` hiện tại. Orca là development orchestration, không phải runtime dependency của ASD.
+
+### Chọn workset đầu mỗi phiên
+
+Một work session dùng một Run cho mục tiêu đủ gọn để kết thúc và báo cáo; không tạo một Run duy nhất cho toàn roadmap. OMP lập workset từ user priority, DAG readiness và worker capability thực tế:
+
+1. Ghi branch/worktree, commit, trạng thái clean, stage đã `DONE` có report và mục tiêu phiên.
+2. Chụp Orca runtime/host/environment và resource state của Run; đọc `task-list --ready`/`worker-list` có pagination. `account list` chỉ dùng để kiểm tra trạng thái provider, không chép email/token/credentials vào Run hoặc repo.
+3. Chọn cap đồng thời theo phiên. Ceiling đề xuất là một coordinator + tối đa ba workers; số thực tế là min(session cap, ready independent Tasks, workers verified available). Đây là ceiling, không phải mục tiêu lấp slot. Orca không cung cấp global idle-slot count; nếu capacity không rõ thì giảm cap. `user_owned`/retained/unverifiable terminals không phải worker rảnh.
+4. Mỗi Task trong workset ghi dependency, owner, file paths, shared contract, acceptance, worktree, agent/model preference và gate. Không dispatch Task đang chờ dependency.
+5. Tạo cả DAG trước rồi dispatch toàn bộ ready wave. Dùng `task-create` + `worker-start --task` cho Task có dependencies; `worker-start --spec` chỉ cho work độc lập không cần DAG edge.
+
+Worktree `current` chỉ dùng khi ownership file không chồng lấn và shared APIs đã freeze. Slice code có nguy cơ xung đột dùng child worktree; OMP tích hợp kết quả về nhánh `dev`. Một coordinator sở hữu các shared-contract edits.
+
+### Agent/model selection và failure handling
+
+- Agent ID phải lấy từ guide/help đúng version và phải được enable trên worker host; tên agent được hỗ trợ không tự chứng minh cài đặt, credentials hoặc readiness. Start receipt `state=ready` và `launch.effective` mới là evidence.
+- `--model` dùng opaque provider model ID; chỉ truyền model cụ thể khi user đã chọn hoặc workset ghi rõ lựa chọn. `--effort` cần `--model`. Orca hiện chỉ forward model override cho Claude/Codex/Cursor/Antigravity/Muse; OpenCode/ZCode dùng model từ cấu hình agent và không nhận `--model`.
+- Ghi `launch.requested` và `launch.effective`; không kết luận model đã dùng từ request flag. Không tự chuyển sang agent/model khác khi start thất bại.
+- Với `worker-start` thất bại, đọc `failedStage`/`residualResources` và làm theo recovery receipt. Không relaunch mù; không stop/abandon/release terminal `unverifiable` hoặc do user sở hữu.
+- Sau `worker_done`, kiểm tra Task ID/Dispatch ID, report và bằng chứng. Quyết định reuse/retain/release trước khi acknowledge Delivery; `DONE` cần stage acceptance và report, không chỉ worker completion.
+
+### Waves và gates thực thi
+
+Bảng này là ready-wave policy. Dependencies trong bảng stage phía trên vẫn là các gate chuẩn; cạnh bắc cầu có thể rút gọn khi lập Task DAG nhưng không xóa acceptance gate.
+
+| Wave | Stage/readiness | Parallel work hợp lệ | Gate / owner |
+|---|---|---|---|
+| A | 03 sau 02 | Config và store có thể tách sau khi envelope/schema/transaction freeze | OMP sở hữu schema, revision, atomicity và failure policy |
+| B | 04 + 05 sau 03 | Discovery/provider/workspace/Git song song với process/PTY runtime | Freeze `agent.Command`, `WorkspaceID`, `ProcessRuntime` ports; 04/05 không sửa shared contract cùng lúc |
+| C | 06 sau 03/04/05 | IPC protocol và CLI commands có thể song song sau wire DTO/protocol freeze | Bootstrap, single owner, lock/socket và assembly có một owner tích hợp |
+| D | 07 sau 06; 08 integration sau 05/06/07 | 07 search/filter pure helper có thể tách; 08 terminal-adapter prep có thể bắt đầu theo Stage 00/05 contract trong lúc 07 làm UI shell | View switching, dimensions, prefix help, quit routing và terminal attach chờ handoff 07→08 |
+| E | 09 sau 06/08 | Fault-matrix authoring có thể chạy song song với recovery implementation | Fault runs chỉ dùng isolated temporary XDG homes, không chạy cùng human PTY QA; owner crash/identity tests là destructive |
+| F | 10 sau 04/07/08/09 | Packaging/checksum/install-doc scaffolding có thể bắt đầu sau khi CLI surface ổn định | V1 acceptance, provider/terminal claims và release chỉ sau evidence của 09 + matrix 04/08 |
+| G | 11 sau 10 | Daemon/client migration là một ownership cutover | Single writer và migration gate trước V2 client routing |
+| H | 12 + Stage 13 core sau 11 | Workspace/metrics song song với history/event persistence sau schema freeze | Stage 13 V2 acceptance chỉ hoàn tất sau Stage 12 |
+| I | 14 sau 11/12/13; Stage 15 core sau 12/13 | MCP adapter/policy song song với profile core sau contract freeze | Stage 15 MCP integration/V3 release chờ Stage 14 |
+
+Critical completion path của V1 là `03 → (04 ∥ 05) → 06 → 07 → 08 → 09 → 10`. Stage 08 prep, Stage 07 search, Stage 09 fault-case authoring và Stage 10 packaging là các **subtasks** song song có ownership riêng; chúng không cho phép đánh dấu stage phụ thuộc `DONE` sớm hơn gate.
+
+### Coordinator-owned gates trước dispatch
+
+- Trước code Stage 07/08, OMP phải chốt và pin một lần TUI/emulator dependencies. `go.mod` hiện không có Bubble Tea/Bubbles/Lip Gloss; `x/vt` là spike-only pseudo-version chưa tagged. README không được coi dependency TUI đã pin ở Stage 01.
+- Freeze file boundary giữa 05 và 08: 05 owns process, background PTY drain, emulator/screen/snapshot/stream; 08 owns input encoding/TUI terminal adapter. Không chia raw-mode, stdin/stdout writer hoặc host-terminal restore giữa workers.
+- Shutdown/quit routing qua 07/08/09 là một shared policy do coordinator chốt; lifecycle/status contract từ Stage 02 là nguồn chuẩn.
+- Stage 00 terminal spike dùng fake children; real interactive provider compatibility chưa được chứng minh. Stage 08/10 phải có provider smoke matrix hoặc carry gate/reduce support claim; Orca coding workers không phải bằng chứng ASD launch provider.
+- Docs có thể scaffold sớm, nhưng điền compatibility/recovery/support claims sau evidence. Stage 10 phải ghi rõ giới hạn, version, terminal và agent thực sự đã kiểm chứng.
+
+Session snapshot, agent/model choice và launch-effective evidence là dữ liệu điều phối theo phiên, không ghi credentials hoặc machine secrets vào roadmap. Sau mỗi wave, cập nhật stage status/report và handoff; chỉ bắt đầu wave kế khi dependency có evidence, không chỉ vừa merge.
+
 
 ## Rủi ro và release gates
 
