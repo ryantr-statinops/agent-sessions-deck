@@ -14,6 +14,18 @@ Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 
 
 V1 là sản phẩm hoàn chỉnh theo phạm vi V1 trong PRODUCT, không phải demo. V2/V3 là các đợt mở rộng độc lập; không cần hoàn thành chúng để phát hành V1. Trước khi bắt đầu mỗi đợt, đối chiếu lại nhu cầu thực tế và cập nhật kế hoạch.
 
+## Execution waves (gộp các stage tương lai)
+
+Giữ Stage 00–02 cùng report/evidence đã hoàn tất. Từ Stage 03 trở đi, triển khai theo bốn wave dưới đây; mỗi Stage vẫn giữ file, acceptance và status riêng. DAG, worker gates, model/privacy và task sequence chi tiết nằm trong [kế hoạch orchestration](orchestration.md).
+
+| Wave | Gộp stage | DAG chính | Gate đầu ra |
+|---|---|---|---|
+| **W1 — Core V1 runtime (M1)** | 03–06 | 03 → (04 ∥ 05) → 06 | CLI điều khiển một owner, fake agent E2E qua nhiều terminal. |
+| **W2 — V1 UX và release (M2)** | 07–10 | 07 → 08 → 09 → 10 | V1 acceptance, provider evidence, recovery và Linux release artifact. |
+| **W3 — V2 daemon và history** | 11–13 | 11 → (12 ∥ 13-core) → 13/V2 gate | Daemon, workspace/metrics và history/events đều qua V2 acceptance. |
+| **W4 — V3 MCP và profiles** | 14–15 | (14 ∥ 15-profile-core) → 15/MCP integration + V3 gate | MCP policy, profile/automation và hồi quy V1/V2. |
+
+Đây là gộp theo đơn vị điều phối, không xóa/đổi Stage ID hay làm yếu acceptance. Hoàn tất M2/Stage 10 rồi đánh giá lại nhu cầu trước khi mở rộng V2/V3.
 ## Danh sách stage
 
 | Stage | Tài liệu | Phụ thuộc bắt buộc | Đầu ra quan sát được | Cỡ việc tương đối |
@@ -96,6 +108,7 @@ flowchart LR
 ## Cách thực thi một stage
 
 Mỗi stage có mục **Skills tham khảo** với skill candidates đúng công đoạn; đó là gợi ý chọn lọc, không phải yêu cầu phải nạp mọi skill. Xem [hướng dẫn .agents](../../../.agents/AGENTS.md), kiểm tra trạng thái skill trong [promoted set](../../../.agents/SKILLS/data/promoted.json), rồi đọc từng `SKILL.md` được chọn trước khi áp dụng. PRODUCT, quyết định đã duyệt và acceptance của stage luôn là nguồn chuẩn.
+Kế hoạch DAG, phân công theo worker đã kiểm chứng, gate model/provider và hướng dẫn coordinator nằm trong [kế hoạch orchestration](orchestration.md). Chỉ dispatch task khi prerequisite hoàn tất và interface/file ownership đã freeze; stage docs vẫn là nguồn acceptance.
 
 1. Đọc PRODUCT, README này và file stage. Kiểm tra dependency đã có evidence, không chỉ đã merge.
 2. Chia checklist thành task nhỏ, mỗi task một owner và phạm vi file cụ thể. Chốt API trước các task song song.
