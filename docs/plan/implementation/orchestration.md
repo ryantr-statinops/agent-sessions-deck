@@ -22,15 +22,12 @@ Ký hiệu `∥` biểu thị hai node không phụ thuộc theo DAG, không b�
 
 | Worker | Bằng chứng hiện có | Cách dùng trong kế hoạch |
 |---|---|---|
-| **OpenCode** | Đã launch và hoàn tất một Orca worker review. Receipt không pin model (`model: null`); OpenCode worker không chứng minh khả năng override model. | Worker Orca duy nhất đã được kiểm chứng trong repo. Trước task gửi source, xác nhận effective provider/model và data policy; không giả định model theo yêu cầu đã áp dụng. |
-| **Kilo Code** | CLI và `/model` picker chạy trực tiếp; Qwen3.8 27B Free hiển thị. Chưa có Orca `worker-start` proof. | Chỉ dùng interactive/manual; không đưa vào DAG Orca cho tới khi có launch/readiness/worker-completion evidence. |
-| **Cline** | CLI và `/model` picker chạy trong Plan mode, auto-approve tắt; DeepSeek V4.1 Flash Free hiển thị. Chưa có Orca dispatch proof. | Chỉ dùng interactive/manual; không xem TUI launch là Orca worker readiness. |
-| **Freebuff** | CLI và `/model` picker chạy; Space Bunny Alpha hiển thị. Chưa có Orca dispatch proof. | Không đưa vào source-bearing task mặc định: provider ẩn danh có thể giữ prompt. Chỉ dùng cho source sau khi user chấp nhận chính sách dữ liệu; chưa có Orca dispatch proof. |
-
+| **OpenCode** | `worker-start --agent opencode` review đã pass; TUI chạy `opencode --model opencode/fledge-alpha-free` hiển thị Fledge Alpha Free (OpenCode Zen). `worker-start --terminal` trên terminal đó bị từ chối `agent_unconfigured`, dù `terminal show` báo `agentIdentity: opencode`. | Orca `--model` không áp dụng cho OpenCode; route `--agent opencode` dùng model theo config, không pin được model riêng. Chưa xác minh được dispatch OpenCode theo model yêu cầu; xác nhận route/provider trước khi gửi source. |
+| **Kilo Code** | TUI chạy `kilo --model kilo/stealth/space-bunny-alpha` hiển thị Space Bunny Alpha · Kilo Gateway (giao diện báo “retires Oct 5”) và cảnh báo phát hiện OpenCode config. `worker-start --terminal` bị từ chối `agent_unconfigured`; `terminal show` không có `agentIdentity`; chưa có `--agent kilo` proof. | Chưa sẵn sàng dispatch qua Orca. Không đổi/move config để né lỗi; cần worker integration được hỗ trợ và model còn khả dụng trước khi giao Stage 05. |
+| **Cline** | CLI và `/model` picker chạy trong Plan mode, auto-approve tắt; DeepSeek V4.1 Flash Free hiển thị. Chưa có `--agent` hay terminal-path Orca dispatch proof. | Chưa tính vào DAG Orca cho tới khi một trong hai route được kiểm chứng end-to-end. |
+| **Freebuff** | CLI và `/model` picker chạy; Space Bunny Alpha hiển thị. Chưa có `--agent` hay terminal-path Orca dispatch proof. | Không đưa vào source-bearing task mặc định: provider ẩn danh có thể giữ prompt. Chỉ dùng cho source sau khi user chấp nhận chính sách dữ liệu và Orca route được xác minh. |
 Các model mong muốn cho OpenCode cần giải quyết trước khi pin vào worker policy: catalog OpenCode trực tiếp hiện có `fledge-alpha-free`, `space-bunny-free`, `muse-spark-1.3-contributor-free`; không thấy `space-bunny-alpha` hoặc Muse Spark 1.4. Không tự thay model yêu cầu bằng model gần tên. Không ghi credentials/tokens vào plan hoặc task prompt.
-
-Ma trận trên là evidence theo lần kiểm tra hiện tại, không phải cam kết hỗ trợ vĩnh viễn. Muốn thêm một worker vào Orca DAG phải chứng minh lần lượt: agent ID được Orca hỗ trợ → launch/readiness pass → worker hoàn tất task bounded → output/diff đúng worktree → model/provider thực tế được xác định. Nếu chưa đủ các bước này, worker là `unverified` và không được tính vào capacity.
-
+Ma trận trên là evidence theo lần kiểm tra hiện tại, không phải cam kết hỗ trợ vĩnh viễn. Muốn thêm worker vào Orca DAG phải chứng minh một route thực tế (`--agent` hoặc `--terminal`) → launch/readiness pass → worker hoàn tất task bounded → output/diff đúng worktree → model/provider thực tế được xác định. Nếu thiếu bất kỳ bước nào, worker là `unverified` và không được tính vào capacity.
 ## Quy tắc tạo và điều phối task
 
 Mỗi Orca task phải có đủ:
