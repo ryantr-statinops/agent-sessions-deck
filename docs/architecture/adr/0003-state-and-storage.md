@@ -1,47 +1,41 @@
 # ADR 0003 — State layout (XDG), single-writer store, and concurrency
 
-Status: **Proposed** (Stage 00 contract slice; starting point from the plan
-README decision 8, not an approved product fact).
+Status: **Accepted for Stage 03 implementation** (coordinator resolution of the Stage 00 proposal; Product paths unchanged).
 
 ## Context
 
-PRODUCT.md §20 places config and both state files under `~/.config/asd/`
-(`config.yaml`, `sessions.json`, `state.json`), which mixes configuration,
-mutable state, and runtime artifacts in one directory and contradicts the XDG
-Base Directory split the plan README proposes. Concurrent CLI/TUI writers to
-plain JSON also risk lost updates and half-written files after a crash. This
-ADR fixes paths, write discipline, and concurrency so Stage 03 can implement
-against a frozen contract.
+When ADR 0003 was drafted, PRODUCT.md §20 placed config and state files under `~/.config/asd/`, mixing configuration and mutable state.
+PRODUCT.md §20 now uses the XDG split; this ADR records the Stage 03 resolution for schema, migration, and transaction boundaries.
+Concurrent CLI/TUI writers to plain JSON risk lost updates and half-written files after a crash.
+This decision keeps the current XDG paths and gives the session store a single atomic aggregate.
 
-## Decision (proposed)
+## Decision (resolved for Stage 03)
 
 ### Layout
 
 | Kind | Path | Notes |
 |---|---|---|
 | Config | `$XDG_CONFIG_HOME/asd/config.yaml` (default `~/.config/asd/config.yaml`) | User-edited; strict parse, unknown keys rejected (Stage 03). |
-| Persistent state | `$XDG_STATE_HOME/asd/` (default `~/.local/state/asd/`), files `sessions.json`, `state.json` with a `schema_version` + `revision` envelope | Owner-written only while an owner is live. |
+| Persistent state | `$XDG_STATE_HOME/asd/` (default `~/.local/state/asd/`), files `sessions.json` and `state.json` | Each file has an independent `schema_version` + `revision` envelope. `sessions.json` owns the full session/attempt snapshot; `state.json` owns `recent_workspaces`. |
 | Runtime | `$XDG_RUNTIME_DIR/asd/control.sock` | Owner control socket; same-user access only; private fallback with documented cleanup when `XDG_RUNTIME_DIR` is absent (Stage 06 decides the fallback path). |
 | Lock | `<state-dir>/.lock` held by the owner for its whole lifetime | Short-term acquisition allowed for the offline mutations the CLI contract permits. |
 
-`[PRODUCT-DELTA]` This moves `sessions.json`/`state.json` out of
-`~/.config/asd/` into the XDG state directory. PRODUCT.md §20 must be updated
-to this table (minimal patch in this slice), and Stage 03 ships a migration:
-if a legacy `~/.config/asd/sessions.json` exists, import it once under
-documented rules, keep a backup, and never delete the source silently.
+### Legacy migration
+PRODUCT.md §20 already reflects the XDG path split.
+If `~/.config/asd/sessions.json` exists and the XDG destination is absent, strictly decode the Stage 02 session array, keep a same-directory backup, and atomically write schema version 1.
+If a valid XDG destination exists, it is authoritative; never merge or overwrite it from the legacy source.
+If data is corrupt or unsupported, preserve it and fail with recovery guidance; never delete the legacy source silently.
 
 ### Single writer and revisions
 
 - While an owner is live, it is the only store writer. Clients mutate via IPC;
   the owner serializes mutations per session (one lifecycle transaction at a
   time) plus store-level transactions for cross-session work.
-- Every mutation bumps a `revision` (store-wide) and carries a request ID when
-  the operation is retryable, so a retried IPC request cannot double-apply
-  (duplicate request ID → return the first result).
-- One transaction updates logical Session + Attempt + revision together, so no
-  observable state spans two files half-written. If the two-file layout cannot
-  be made atomic, Stage 03 must use an aggregate file or a journal/commit
-  marker — decided at implementation time, recorded in the Stage 03 handoff.
+- Each file has an independent monotonic `revision`. `sessions.json` uses the revision returned by Stage 02 `Store.Load`/`Commit`; `state.json` revision applies only to recent-workspace changes.
+- Retryable lifecycle mutations carry a request ID, so a retry cannot double-apply.
+  A duplicate request ID returns the first result.
+- The sessions store is one aggregate `sessions.json` envelope: `schema_version`, `revision`, and the complete session/attempt array from Stage 02 `EncodeSessions`. `Store.Commit` updates this snapshot and its revision in one atomic file replacement; no two-file journal is needed for this transaction.
+- `state.json` holds recent-workspace state with its own `schema_version` and revision. No Stage 03 operation spans both files; any future cross-file atomic mutation requires a new design decision before implementation.
 - Clocks are UTC; persisted snapshots carry `observed_at` and an authority
   marker (`live` vs. `stored`) so offline readers cannot mistake stored
   `running` for liveness (see CLI contract).
@@ -107,6 +101,4 @@ documented rules, keep a backup, and never delete the source silently.
 2. **Go module identity — resolved for this repository in Stage 01.** `go.mod` uses `github.com/ryantr-statinops/agent-sessions-deck`, matching verified `origin`. If renamed or transferred, update `go.mod`, `go.sum`, `vendor/` and import paths together.
 3. Exact private fallback runtime path when `XDG_RUNTIME_DIR` is unset
    (Stage 06).
-4. Whether the two-file (`sessions.json` + `state.json`) layout survives or
-   collapses into an aggregate/journal design (Stage 03, with a recorded
-   rationale either way).
+4. **Resolved for Stage 03:** `sessions.json` is the atomic aggregate session store; `state.json` stores recent-workspace metadata with an independent revision. Session, Attempt and session revision never span files.
