@@ -45,7 +45,7 @@ Coordinator giữ PRODUCT, shared DTO/API, dependency changes, task DAG, stage s
 
 Stage 03 là task đầu tiên; không dispatch 04/05 trước khi config/store contract đóng băng.
 
-- **W1.0 — Contract freeze (coordinator):** quyết định XDG config/state/runtime paths; config schema và stable IDs; JSON `schema_version`/`revision`; compatibility/migration policy cho `snake_case` từ Stage 02; logical-session transaction boundary; lock ownership; corrupt/disk-full behavior. Ghi các quyết định vào ADR hoặc stage documentation trước khi chia writer.
+- **W1.0 — Contract freeze (coordinator, complete in ADR 0003):** `config.yaml` uses XDG_CONFIG_HOME; `sessions.json` is the single atomic Store aggregate with Stage 02 session/attempt payload, `schema_version`, and the Store revision; `state.json` stores recent workspace state with an independent revision. No transaction spans these files. Legacy unversioned sessions import only when the XDG destination is absent, with backup and source preservation.
 - **W1.1 — Config path/schema:** `internal/config/`, config example và configuration docs; strict YAML validation, path resolution, argv literal, permissions trên isolated temp home. Owner riêng.
 - **W1.2 — Durable store:** `internal/store/` và state-home locking/atomic persistence; migrations, backup, corruption/fault/concurrent-writer tests. Owner riêng sau W1.0; coordinator xử lý giao điểm với DTO/path API.
 - **W1.3 — Stage 03 integration gate:** config absent/invalid, future schema, migration roundtrip, write-failure giữ state cũ hoặc mới nguyên vẹn, lock contention, permissions, không ghi state thật. Sau khi pass, chốt config DTO/path/lock/failure APIs làm input cho 04–06.
