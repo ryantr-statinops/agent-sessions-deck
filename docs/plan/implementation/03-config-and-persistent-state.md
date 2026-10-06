@@ -1,6 +1,7 @@
 # Stage 03 — Config và persistent state
 
-Trạng thái: `DONE` · Milestone: M1 · Phụ thuộc: 02 · Cỡ việc: M.
+Trạng thái: PLANNED · Milestone: M1 · Phụ thuộc: 02 · Cỡ việc: M.
+CUT 26.=27
 
 ## Mục tiêu
 
@@ -21,19 +22,18 @@ Mỗi file được ghi qua temp file cùng thư mục, flush/fsync, atomic rena
 Chỉ import legacy `~/.config/asd/sessions.json` khi file XDG đích chưa tồn tại: strict-decode mảng Stage 02, giữ backup, ghi envelope schema v1. File XDG hợp lệ là nguồn authoritative; dữ liệu corrupt hoặc future-version phải được giữ nguyên và fail an toàn.
 
 ## Checklist thực thi
-
 - [x] Resolve XDG config/state/runtime theo ADR; test override trong isolated temp home. Không dùng một biến test để ghi đè HOME của shell làm việc.
-- [x] Schema config: refresh, discovery `extra_paths`, agents (stable ID/name/executable/args), workspace khai báo tường minh và terminal limits; defaults nhỏ, có tài liệu. Recent workspace history nằm trong `state.json`.
-- [x] Parse YAML strict, validate unknown keys/duplicate ID/invalid duration/empty executable. Lỗi nêu file/key và cách sửa.
-- [x] Command là executable + argv array; không tự `sh -c`, eval, split chuỗi shell. Expand `~` cho path rõ ràng, không expand environment secret tùy tiện.
-- [x] Directory riêng mode 0700, state/config mới 0600; không chmod file người dùng hiện hữu theo cách phá quyền mà không thông báo.
-- [x] `sessions.json` và `state.json` đều có envelope `schema_version`/`revision`; sessions/attempts/workspace references nằm trong snapshot đầy đủ của `sessions.json`, mỗi file có revision riêng.
-- [x] Save qua temp cùng directory, flush/fsync, atomic rename và directory sync khi phù hợp; xử lý disk-full/write-failure, không truncate bản cũ.
-- [x] Lock state home bằng cơ chế Linux rõ ràng; owner giữ lock suốt đời, CLI offline lấy lock ngắn trước read/mutate được cho phép.
-- [x] Một session transaction ghi atomically toàn bộ session/attempt snapshot và revision vào `sessions.json`; không có transaction spanning `sessions.json` và `state.json`.
-- [x] Detect corrupt/truncated JSON, giữ nguyên dữ liệu lỗi; báo recovery instructions, không tự reset state thành rỗng.
-- [x] Chỉ migrate legacy `~/.config/asd/sessions.json` khi file XDG đích chưa tồn tại; strict-decode, giữ backup/source và không merge đè lên destination hợp lệ.
-- [x] Không persist env, token, terminal raw output; argv có thể chứa secret nên nêu usage, tránh command line logging mặc định và hỗ trợ display redaction.
+- [ ] Schema config khớp Product và Stage 03: refresh, extra_paths, stable agent ID/name/executable/argv, workspace khai báo tường minh và terminal limits.
+- [ ] Strict YAML: unknown/duplicate keys, invalid hoặc non-positive duration, duplicate agent IDs, empty executable và trailing document fail với lỗi file/key có hướng sửa.
+- [ ] Command là executable + argv array; không shell-split/eval. Expand ~ theo quy tắc đã chốt; display không làm lộ argv secret.
+- [ ] Directory/state/config mới đúng mode; first write tạo state home private; không chmod destructively file/dir người dùng đã có.
+- [ ] sessions.json/state.json có envelope schema_version/revision; reject corrupt, null/missing payload và trailing JSON.
+- [ ] Atomic per-file write dùng temp cùng directory, flush/fsync, rename và directory sync khi phù hợp; fault không truncate image cũ.
+- [ ] Owner giữ state-home lock cả lifetime nhưng store owner vẫn load/commit; offline read/mutate dùng lock ngắn và bị từ chối khi owner live.
+- [ ] Session transaction ghi cả snapshot/revision atomically; recent workspace revision của state.json độc lập.
+- [ ] Corrupt/truncated/future state được giữ nguyên, fail an toàn, recovery guidance rõ.
+- [ ] Legacy import chỉ khi XDG path thật sự absent; strict decode; backup riêng tư không ghi đè; giữ source và destination authoritative.
+- [x] Không persist env, token, terminal raw output; argv có thể chứa secret nên không log command line mặc định và redact display.
 
 ## Kế hoạch triển khai Stage 03
 
