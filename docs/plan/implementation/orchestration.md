@@ -41,16 +41,26 @@ Mỗi Orca task phải có đủ:
 
 Coordinator giữ PRODUCT, shared DTO/API, dependency changes, task DAG, stage status và integration. Worker không tự mở rộng scope, không tự đổi contract chung, không tự đánh dấu stage `DONE`. Song song chỉ dùng cho các node độc lập sau khi interface/file ownership đã freeze. Mỗi failure giữ evidence; dependent tasks tiếp tục `blocked` cho tới khi coordinator xử lý blocker. Trước retry/replacement phải kiểm tra worker/task/terminal state để tránh chạy trùng side effect. Dùng Orca thật theo version-matched guide tại [skill orchestration](../../../.agents/skills/orchestration/SKILL.md); không mô phỏng worker handoff bằng CLI TUI hoặc subagent ngoài Orca.
 
-## Wave 1 task sequence — bước kế tiếp
+## Wave 1 — execution plan (Stage 03–06)
 
-Stage 03 là task đầu tiên; không dispatch 04/05 trước khi config/store contract đóng băng.
+### Dependency and worker assignment
 
-- **W1.0 — Contract freeze (coordinator, complete in ADR 0003):** `config.yaml` uses XDG_CONFIG_HOME; `sessions.json` is the single atomic Store aggregate with Stage 02 session/attempt payload, `schema_version`, and the Store revision; `state.json` stores recent workspace state with an independent revision. No transaction spans these files. Legacy unversioned sessions import only when the XDG destination is absent, with backup and source preservation.
-- **W1.1 — Config path/schema:** `internal/config/`, config example và configuration docs; strict YAML validation, path resolution, argv literal, permissions trên isolated temp home. Owner riêng.
-- **W1.2 — Durable store:** `internal/store/` và state-home locking/atomic persistence; migrations, backup, corruption/fault/concurrent-writer tests. Owner riêng sau W1.0; coordinator xử lý giao điểm với DTO/path API.
-- **W1.3 — Stage 03 integration gate:** config absent/invalid, future schema, migration roundtrip, write-failure giữ state cũ hoặc mới nguyên vẹn, lock contention, permissions, không ghi state thật. Sau khi pass, chốt config DTO/path/lock/failure APIs làm input cho 04–06.
-- **W1.4 — Stage 04 ∥ Stage 05:** hai task độc lập theo ownership đã ghi ở stage docs; chỉ mở sau W1.3. Không cùng sửa `go.mod`; dependency request do coordinator duyệt. Stage 05 còn phải tuân ADR/spike 00.
-- **W1.5 — Stage 06 integration:** sau 04+05; freeze IPC protocol trước khi tách IPC/CLI bounded tasks. Coordinator giữ bootstrap/assembly và chạy multi-terminal owner/client E2E.
-- **W1.6 — W1 close:** chạy stage checks và applicable full suite, lưu `reports/stage-03.md` đến `stage-06.md` có status/evidence/handoff; chỉ khi M1 gate pass mới mở W2.
+Dependency remains `03 → (04 ∥ 05) → 06`. For this run, use one verified Orca worker type — OpenCode — with the configured default model and execute the independent Stage 04/05 work serially; do not assume extra concurrent OpenCode slots. Stage 04/05 stay blocked until Stage 03 passes its gate.
 
-Kiểm tra skill phù hợp trong từng stage trước khi giao việc. Skill là hướng dẫn quy trình, không thay contract, acceptance hoặc evidence của dự án.
+- Worker: `opencode`, `--worktree current`, branch `dev`; omit `--model` so Orca/OpenCode uses the user-configured default. The latest one-line ping reported `opencode/fledge-alpha-free`, while the Orca receipt left `model: null`; each new dispatch must report its effective model. Do not silently substitute a different model.
+- Coordinator owns PRODUCT/ADR decisions, shared interfaces, `go.mod`/`go.sum`, acceptance review and Stage status. One active task at a time on the current `dev` worktree; no overlap in writable files.
+- Stage 04/05 dependencies allow parallelism in principle, but the current plan uses one OpenCode worker sequentially for safer commits and verified capacity.
+
+### Ordered implementation tasks
+
+1. **W1.0 — Contract freeze: complete.** ADR 0003 and the Stage 03 plan freeze XDG paths, per-file version/revision envelopes, atomic `sessions.json` aggregate, independent `state.json` recents, and legacy import precedence.
+2. **Stage 03 — Config and persistent state.** Follow the slices in [`Stage 03`](03-config-and-persistent-state.md): XDG config/schema; strict YAML/argv/security; versioned stores/revisions/locking; per-file atomic persistence; legacy migration/backup. Run each slice's behavior/fault tests before its commit and push. Gate: all Stage 03 acceptance passes in an isolated temp home; write/read revisions, migration, permissions and lock behavior are evidenced; report `stage-03.md` is written.
+3. **Stage 04 — Discovery, providers and workspaces.** Own `internal/discovery/`, provider implementations, `internal/workspace/`, `internal/git/`, and provider/config docs. First commit PATH precedence, identity/probe limits and generic `BuildCommand` behavior with fixtures; next commit workspace/Git resolution and changed-path parsing fixtures; then add only providers supported by evidence and update the compatibility matrix in a separate docs-file commit. Acceptance is the Stage 04 fixture matrix; do not launch unverified real providers.
+4. **Stage 05 — PTY and session runtime.** Own `internal/process/`, `internal/pty/`, `internal/terminal/`, Stage 05 runtime files and integration tests. Commit in small slices: process identity/spawn/reap; PTY single-reader/drain and terminal snapshot; serialized input/resize/lease; stop/restart/cleanup/concurrency. Each slice carries its behavior tests. No new dependency or `go.mod` edit without coordinator approval. Gate: fake-agent controlling-TTY, identity/descendant, detach/reattach, stop/restart, flood, cleanup and race acceptance passes; update runtime/terminal docs separately.
+5. **Stage 06 — Foreground IPC and CLI.** After 04+05, coordinator freezes the IPC protocol and owner/bootstrap contract. OpenCode implements bounded IPC and CLI slices serially: owner lock/socket/handshake; request IDs/revision/error framing; CLI commands/JSON semantics; multi-client E2E. Keep bootstrap/assembly and shared protocol changes coordinator-owned. Gate: Stage 06 multi-terminal owner/client, dedupe, offline and protocol tests pass.
+
+### Commit, push and wave gate
+
+For every code slice: run its targeted tests, make one small behavior-complete commit containing implementation plus relevant tests, and immediately push that commit to `origin/dev` before the next slice. For docs, commit one file per commit. Do not accumulate several slices into a stage-end commit; if a test fails, fix it before pushing or starting dependent work. Confirm each push succeeded before proceeding.
+
+At each stage gate, coordinator reviews the diff and evidence, updates the stage report in its own one-file docs commit, then starts the next task. Keep child stage statuses `PLANNED` until their acceptance and report are complete. Close W1 only after Stage 03, 04, 05 and 06 gates pass and the W1 end-to-end `make check` passes; then update W1 status/report. No implementation dispatch is authorized by this plan alone.
