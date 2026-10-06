@@ -1,0 +1,39 @@
+# Agent Session Deck configuration example.
+#
+# Path resolution follows ADR 0003: $XDG_CONFIG_HOME/asd/config.yaml
+# (default ~/.config/asd/config.yaml). Strict parse: unknown keys,
+# duplicate keys, duplicate agent IDs, invalid durations and empty
+# executables are refused with a file/key error.
+
+# How often the dashboard re-reads session metadata.
+refresh: 2s
+
+discovery:
+  # Additional directories scanned for agent executables after PATH.
+  extra_paths:
+    - ~/.local/bin
+    - /opt/agents/bin
+
+agents:
+  - id: opencode
+    name: OpenCode
+    executable: /usr/local/bin/opencode
+    args: []
+  - id: claude
+    name: Claude Code
+    executable: /usr/local/bin/claude
+    args: ["--model", "default"]
+  - id: codex
+    name: Codex
+    executable: /usr/local/bin/codex
+    args: []
+
+workspaces:
+  # Explicitly declared workspaces; `~` expands to the current user's home.
+  - path: ~/Kestrel
+
+terminal:
+  # Retained terminal history lines per session.
+  scrollback: 10000
+  # Queued input bytes before back-pressure.
+  max_input_queue: 65536
