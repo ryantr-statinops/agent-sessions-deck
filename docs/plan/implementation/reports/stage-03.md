@@ -1,6 +1,6 @@
 # Stage 03 — Config and persistent state
 
-Trạng thái: `DONE` theo evidence dưới đây · Milestone: M1 · Phụ thuộc: 02 · Hoàn thành qua gate: `make check` pass, isolated temp-home behavior suite pass.
+Trạng thái: PLANNED · Milestone: M1 · Phụ thuộc: 02 · Coordinator review corrections pending.
 
 ## Kết quả
 
@@ -27,4 +27,11 @@ Chạy trên Linux, offline (vendored), không ghi vào real `$HOME`:
 
 ## Review
 
-Independent review chưa chạy trong run này; acceptance ở trên đều có behavior test tương ứng trong isolated temp home. Coordinator có thể re-run review; các lỗi file permission và conflict đã được pinned bằng tests.
+Coordinator review after the worker handoff found blockers before Stage 04/05 handoff:
+
+- Reproduced: a first sessions.json Commit under a previously absent XDG state directory fails because AcquireLock tries to create .lock before creating its parent.
+- Store code reacquires the flock for each mutation, so an owner holding the lifetime lock cannot write through the store; offline Load currently does not take the short lock.
+- Envelope decoders read one JSON value without requiring EOF; trailing JSON can be accepted. Config keys also diverge from PRODUCT.md section 29 refresh/session-backend nesting.
+- Legacy backup permissions and an existing/dangling destination path need safe handling tests.
+
+Follow-up fixes and acceptance are in progress. Keep Stage 03 PLANNED; do not dispatch Stage 04/05 until these findings are closed.
