@@ -8,10 +8,10 @@ import (
 // faults lets white-box tests inject disk failures at each step of the
 // atomic replace, proving the previous image survives a failed step.
 type faults struct {
-	write   error
-	sync    error
-	rename  error
-	chmod   error
+	write  error
+	sync   error
+	rename error
+	chmod  error
 }
 
 // activeFaults is reset by tests; nil in production.
