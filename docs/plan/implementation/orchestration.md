@@ -51,16 +51,92 @@ Dependency remains `03 → (04 ∥ 05) → 06`. For this run, use one verified O
 - Coordinator owns PRODUCT/ADR decisions, shared interfaces, `go.mod`/`go.sum`, acceptance review and Stage status. One active task at a time on the current `dev` worktree; no overlap in writable files.
 - Stage 04/05 dependencies allow parallelism in principle, but the current plan uses one OpenCode worker sequentially for safer commits and verified capacity.
 
-### Ordered implementation tasks
+### Commit ledger — baseline 55 commits
 
-1. **W1.0 — Contract freeze: complete.** ADR 0003 and the Stage 03 plan freeze XDG paths, per-file version/revision envelopes, atomic `sessions.json` aggregate, independent `state.json` recents, and legacy import precedence.
-2. **Stage 03 — Config and persistent state.** Follow the slices in [`Stage 03`](03-config-and-persistent-state.md): XDG config/schema; strict YAML/argv/security; versioned stores/revisions/locking; per-file atomic persistence; legacy migration/backup. Run each slice's behavior/fault tests before its commit and push. Gate: all Stage 03 acceptance passes in an isolated temp home; write/read revisions, migration, permissions and lock behavior are evidenced; report `stage-03.md` is written.
-3. **Stage 04 — Discovery, providers and workspaces.** Own `internal/discovery/`, provider implementations, `internal/workspace/`, `internal/git/`, and provider/config docs. First commit PATH precedence, identity/probe limits and generic `BuildCommand` behavior with fixtures; next commit workspace/Git resolution and changed-path parsing fixtures; then add only providers supported by evidence and update the compatibility matrix in a separate docs-file commit. Acceptance is the Stage 04 fixture matrix; do not launch unverified real providers.
-4. **Stage 05 — PTY and session runtime.** Own `internal/process/`, `internal/pty/`, `internal/terminal/`, Stage 05 runtime files and integration tests. Commit in small slices: process identity/spawn/reap; PTY single-reader/drain and terminal snapshot; serialized input/resize/lease; stop/restart/cleanup/concurrency. Each slice carries its behavior tests. No new dependency or `go.mod` edit without coordinator approval. Gate: fake-agent controlling-TTY, identity/descendant, detach/reattach, stop/restart, flood, cleanup and race acceptance passes; update runtime/terminal docs separately.
-5. **Stage 06 — Foreground IPC and CLI.** After 04+05, coordinator freezes the IPC protocol and owner/bootstrap contract. OpenCode implements bounded IPC and CLI slices serially: owner lock/socket/handshake; request IDs/revision/error framing; CLI commands/JSON semantics; multi-client E2E. Keep bootstrap/assembly and shared protocol changes coordinator-owned. Gate: Stage 06 multi-terminal owner/client, dedupe, offline and protocol tests pass.
+This ledger decomposes the stage checklists into independently testable behavior slices. **Baseline: 55 future commits** — Stage 03: 12; Stage 04: 13; Stage 05: 15; Stage 06: 14; W1 close: 1. It excludes this planning-doc commit, previously pushed planning commits, bug-fix commits, and any coordinator-approved dependency change. One commit is not one file for code: implementation and its behavior tests stay together. Every documentation artifact below is a separate one-file commit; stage report and stage-checklist status are separate files and therefore separate commits.
 
-### Commit, push and wave gate
+#### Stage 03 — Config and persistent state (11 stage commits + status)
 
-For every code slice: run its targeted tests, make one small behavior-complete commit containing implementation plus relevant tests, and immediately push that commit to `origin/dev` before the next slice. For docs, commit one file per commit. Do not accumulate several slices into a stage-end commit; if a test fails, fix it before pushing or starting dependent work. Confirm each push succeeded before proceeding.
+| ID | Commit-sized change and owned scope | Evidence before push |
+|---|---|---|
+| W1-03.01 | XDG config/state/runtime path resolution and defaults in internal/config; isolated temp-home path tests. | XDG overrides, absent dirs/defaults; prove no write to real home. |
+| W1-03.02 | Config schema plus strict YAML validation: unknown keys, duplicate IDs, invalid durations and empty executable; actionable file/key errors. | Config parser behavior tests, valid and invalid fixtures. |
+| W1-03.03 | Executable + argv model, explicit tilde path expansion and safe display/redaction; never shell-split/eval. | Literal shell metacharacters remain argv; injection fixture cannot execute a shell payload. |
+| W1-03.04 | New directory/file permissions and state-home lock lifecycle. | 0700/0600 tests, preserve existing-file modes, owner lock and offline lock contention tests. |
+| W1-03.05 | sessions.json envelope, strict codec, schema/revision and full snapshot commit API. | Round-trip, future-schema/corrupt-image and stale-revision behavior tests. |
+| W1-03.06 | Independent state.json envelope/revision and recent-workspace API. | Recent update increments only state revision; reload and invalid-image tests. |
+| W1-03.07 | Per-file atomic replace/fault handling for both stores. | Inject write/flush/rename failures; prior or complete new image survives, never half JSON; concurrent writers are refused. |
+| W1-03.08 | Legacy import, destination precedence, backup/source preservation and migration. | Round-trip IDs/names/exit metadata; import only when XDG destination is absent; repeated start is safe. |
+| W1-03.09 | config.example.yaml only. | Example parses under strict schema and matches defaults. |
+| W1-03.10 | docs/configuration.md only. | Link check; documents XDG, schema, argv and permissions. |
+| W1-03.11 | docs/plan/implementation/reports/stage-03.md only. | Record commands/evidence, migration/fault results and remaining limitations. |
+| W1-03.12 | docs/plan/implementation/03-config-and-persistent-state.md only: mark checklist items/status from observed acceptance. | All Stage 03 acceptance passes in isolated home; make check passes. |
 
-At each stage gate, coordinator reviews the diff and evidence, updates the stage report in its own one-file docs commit, then starts the next task. Keep child stage statuses `PLANNED` until their acceptance and report are complete. Close W1 only after Stage 03, 04, 05 and 06 gates pass and the W1 end-to-end `make check` passes; then update W1 status/report. No implementation dispatch is authorized by this plan alone.
+#### Stage 04 — Discovery, providers and workspaces (12 stage commits + status)
+
+| ID | Commit-sized change and owned scope | Evidence before push |
+|---|---|---|
+| W1-04.01 | PATH/extra_paths discovery, canonical executable checks and symlink/binary dedupe in internal/discovery. | Missing, non-executable, spaced path, symlink and precedence fixtures. |
+| W1-04.02 | Bounded identity/version probes, provenance, timeout, output cap, concurrency and cache. | Timeout/output-cap/duplicate-probe fixtures; no interactive probe. |
+| W1-04.03 | Configured provider overrides and stable-ID/name collision handling. | Duplicate IDs/names fail deterministically; no unintended binary launch. |
+| W1-04.04 | Generic provider BuildCommand and launch spec in internal/providers/generic. | Literal argv/workspace cwd and shell-injection fixtures. |
+| W1-04.05 | Workspace source selection and canonical identity in internal/workspace. | Current/explicit/config/recent path, invalid directory, nested cwd and symlink fixtures. |
+| W1-04.06 | Git root/branch/detached/worktree/bare/no-Git/permission metadata in internal/git. | Normal, nested, linked-worktree, detached and non-repo fixtures. |
+| W1-04.07 | NUL-delimited Git changed-file parser and record counts. | Rename, untracked, unmerged and newline filenames; count records, not lines. |
+| W1-04.08 | Claude provider adapter/launch spec only. | Identity and argv fixtures; unverified vendor capabilities remain unclaimed. |
+| W1-04.09 | Codex provider adapter/launch spec only. | Identity and argv fixtures; unverified vendor capabilities remain unclaimed. |
+| W1-04.10 | OpenCode provider adapter/launch spec only. | Identity and argv fixtures; unverified vendor capabilities remain unclaimed. |
+| W1-04.11 | docs/providers.md only: compatibility matrix and verification timestamps. | Matrix distinguishes available/uncertain and excludes unsupported claims. |
+| W1-04.12 | docs/plan/implementation/reports/stage-04.md only. | Record fixture results and concrete-provider smoke still deferred to Stage 10. |
+| W1-04.13 | docs/plan/implementation/04-discovery-providers-and-workspaces.md only: update checklist/status. | Stage 04 fixtures and make check pass; matrix reviewed. |
+
+#### Stage 05 — PTY and session runtime (14 stage commits + status)
+
+| ID | Commit-sized change and owned scope | Evidence before push |
+|---|---|---|
+| W1-05.01 | Resolved executable/argv, validated cwd, inherited non-persisted env and process identity in internal/process. | Fake child observes cwd/env/argv; identity records owner/attempt and Linux process facts. |
+| W1-05.02 | Controlling-PTY/new-session launch and Starting-to-Running transaction in internal/pty and internal/session. | TTY/PGID handshake; save-after-spawn failure cleans only the verified child. |
+| W1-05.03 | One PTY reader per session, detached-output drain and descriptor shutdown. | EOF/EIO/broken-input behavior; detach does not stop draining or leak descriptors. |
+| W1-05.04 | Terminal state parser for UTF-8 chunk boundaries, alt-screen, cursor/modes and runtime query replies. | Split-sequence and controlling-TTY integration fixtures. |
+| W1-05.05 | Snapshot sequence, incremental update and attach/resubscribe gap handling. | Snapshot + subscribe cannot lose intervening bytes; stale sequence requests resync. |
+| W1-05.06 | Bounded screen/scrollback/render queues and overflow policy. | Output flood remains bounded; parser input is not silently dropped; observable overflow behavior. |
+| W1-05.07 | Serialized input adapter, literal paste and key/input encoding. | Concurrent writers serialize; paste remains literal; raw/line/Ctrl+C fake-agent tests. |
+| W1-05.08 | Resize validation/debounce, PTY window-size update and interactive input lease. | Resize produces SIGWINCH; second writer is refused; lease loss detaches without killing process. |
+| W1-05.09 | Single Wait, exit classification, trailing-output drain and attempt-generation callback fencing. | Exit/stop race tests; stale callback cannot overwrite a newer attempt. |
+| W1-05.10 | Graceful stop, explicit kill, restart serialization and descendant/process-group identity checks. | Cooperative and TERM-ignoring children; explicit kill; restart only after verified exit; external sentinel survives. |
+| W1-05.11 | Runtime fault/race/leak acceptance cases in tests/integration/runtime. | Launch/save failure, residual descendant, boot/starttime mismatch, concurrent lifecycle, FD/goroutine cleanup and race suite. |
+| W1-05.12 | New docs/architecture/process-ownership.md only; explain as-built identity/lifecycle and link ADR 0001. | Documentation matches tested behavior; no duplicate or changed ADR decision. |
+| W1-05.13 | New docs/architecture/terminal-stream-protocol.md only; sequence/snapshot/input/resize/lease contract and link ADR 0002. | Documentation matches Stage 05 stream tests. |
+| W1-05.14 | docs/plan/implementation/reports/stage-05.md only. | Record fake-agent, race, leak, descendant and Linux limitations evidence. |
+| W1-05.15 | docs/plan/implementation/05-pty-and-session-runtime.md only: update checklist/status. | Every Stage 05 acceptance passes; make check and race suite pass. |
+
+#### Stage 06 — Foreground IPC and CLI (13 stage commits + status)
+
+| ID | Commit-sized change and owned scope | Evidence before push |
+|---|---|---|
+| W1-06.01 | Foreground owner lock/bootstrap, instance identity and socket creation in internal/app and internal/ipc. | Two simultaneous bootstraps produce exactly one owner; loser connects or gets typed error, never spawns another owner. |
+| W1-06.02 | Private runtime socket permissions, same-user access, fallback path and stale/unresponsive/replacement-owner classification. | Permission, missing XDG_RUNTIME_DIR, stale socket and live-owner protection fixtures. |
+| W1-06.03 | Versioned IPC handshake/framing, request/operation/payload/error/revision fields, size limits and timeouts. | Malformed, oversize, timeout and protocol-version mismatch tests. |
+| W1-06.04 | Serialized mutation, revision/generation fencing and duplicate request-ID idempotency. | Lost-response retry does not create/stop/restart twice; stale generation is rejected. |
+| W1-06.05 | Offline/online scan, list, inspect service and CLI semantics. | Live vs stored authority, observed_at, filters, ambiguous ID and JSON fixtures. |
+| W1-06.06 | new selection/create/launch and no-owner foreground-owner behavior. | TTY creates/attaches; non-TTY with no owner fails before spawn; client cancel does not kill session. |
+| W1-06.07 | open attach/detach and terminal-stream client disconnect behavior. | Detach preserves attempt; offline PTY error is honest; second input lease rejected. |
+| W1-06.08 | rename, restart, stop, kill lifecycle commands and destructive confirmations. | Idempotency, force/yes rules, historical/offline reconciliation and ownership proof tests. |
+| W1-06.09 | Stable JSON/stdout/stderr, typed errors/exit codes, no ANSI for pipes and actionable help. | CLI contract matrix and existing docs/architecture/cli-contract.md assertions pass. |
+| W1-06.10 | Owner/client multi-terminal E2E and protocol fault acceptance. | A/B/C terminals, no lost revision, duplicate request, attach disconnect, malformed/oversize IPC and second-owner cases. |
+| W1-06.11 | docs/cli.md only. | Examples/owner lifetime/TTY semantics match observed CLI. |
+| W1-06.12 | docs/architecture/ipc-protocol.md only. | Framing, ownership, retry, limits and error semantics match tests. |
+| W1-06.13 | docs/plan/implementation/reports/stage-06.md only. | Record multi-terminal, offline, dedupe and protocol evidence. |
+| W1-06.14 | docs/plan/implementation/06-foreground-ipc-and-cli.md only: update checklist/status. | Stage 06 E2E and make check pass. |
+
+#### Wave close (1 commit)
+
+| ID | Commit-sized change and owned scope | Evidence before push |
+|---|---|---|
+| W1-00.55 | docs/plan/implementation/orchestration.md only: mark W1 closed and record Stage 03–06 evidence links. | Full W1 E2E gate and make check pass; all four stage reports/status commits are present. |
+
+Each code row is one commit: run that row's targeted behavior/fault tests, commit implementation and tests together, then push to origin/dev before starting the next row. Each docs row changes exactly one file and runs the Markdown link check where applicable. Orca uses one active OpenCode worker at a time with --agent opencode --worktree current, no --model override; worker reports the effective default model. Coordinator reviews each commit and ensures it reaches dev; if the worker cannot push, coordinator pushes before the next slice. Never advance past a failed test or failed push. go.mod/go.sum changes, if genuinely needed, are coordinator-owned extra commits and not in the 55 baseline.
+
+W1.0 contract freeze is already complete in ADR 0003. Stage 03 is first; Stage 04 and 05 are independent only in the DAG, but this single-worker run executes them serially after Stage 03 passes. Stage 06 starts only after both gates pass. Keep each stage PLANNED until its acceptance, report and checklist-status commit are complete.
+
+The coordinator closes W1 only after Stage 03–06 gates and the full end-to-end make check pass. A worker completion message alone is not a gate.
