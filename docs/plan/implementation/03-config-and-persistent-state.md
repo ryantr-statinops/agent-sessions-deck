@@ -35,6 +35,28 @@ Chỉ import legacy `~/.config/asd/sessions.json` khi file XDG đích chưa tồ
 - [ ] Chỉ migrate legacy `~/.config/asd/sessions.json` khi file XDG đích chưa tồn tại; strict-decode, giữ backup/source và không merge đè lên destination hợp lệ.
 - [ ] Không persist env, token, terminal raw output; argv có thể chứa secret nên nêu usage, tránh command line logging mặc định và hỗ trợ display redaction.
 
+## Kế hoạch triển khai Stage 03
+
+### Worker, branch và phạm vi
+
+- Dùng một OpenCode worker qua Orca `--agent opencode`, `--worktree current`; không truyền `--model`, dùng model default theo yêu cầu. Ping gần nhất tự báo model `opencode/fledge-alpha-free`; receipt không pin model, nên worker phải ghi model thực tế trong handoff, không xem đó là model override.
+- Làm trên nhánh `dev`, bắt đầu từ working tree sạch. Coordinator giữ contract chung, `go.mod`, review/integration và Stage 03 status. Không giao code Stage 04/05 trước khi Stage 03 qua gate.
+- Chỉ sửa các scope Stage 03: `internal/config/`, `internal/store/`, state-home path/lock helpers, config example và `docs/configuration.md`; không sửa state thật trong `$HOME`.
+
+### Slices, acceptance và commits
+
+1. **XDG config/path + schema defaults:** thêm resolver theo ADR 0003, config absent defaults, strict YAML validation, stable agent IDs, explicit workspace, argv literal; tests cho missing/unknown/duplicate/invalid values. Commit nhỏ gồm behavior và tests liên quan.
+2. **Config security/command contract:** permissions `0700`/`0600`, `~` path expansion, executable + argv arrays, redacted display; chứng minh không dùng shell/eval và không persist secrets. Commit riêng sau targeted tests.
+3. **Versioned stores:** implement `sessions.json` full-snapshot envelope và `state.json` recent-workspace envelope, strict decode, per-file revisions và Store expected-revision conflict. Commit riêng với serialization/round-trip/conflict tests.
+4. **Atomic persistence/lock:** per-file temp-write, flush/fsync, atomic rename, directory sync, owner lifetime lock và offline mutation rules; fault/permission/concurrent-writer tests trong isolated temp home. Commit riêng sau targeted tests.
+5. **Legacy migration:** chỉ import legacy sessions khi XDG target absent; backup, preserve source, không merge lên destination; round-trip/backup/corrupt/future-version tests. Commit riêng.
+6. **Docs/report:** config example và mỗi Markdown file được commit riêng; Stage 03 report là commit cuối sau khi acceptance pass.
+
+Mỗi code commit phải nhỏ nhất nhưng hoàn chỉnh về behavior và test. Chạy test liên quan trước commit; chỉ push commit đã pass lên `origin/dev` ngay sau khi tạo, rồi mới bắt đầu slice kế tiếp. Docs: một file mỗi commit theo quy ước maintainer. Không gom các slice vào một stage-end commit.
+
+### Gate Stage 03
+
+Giữ status `PLANNED` cho tới khi các acceptance ở trên có evidence, `make check` pass, config/store tests đã chạy trong temporary home, và report/handoff được ghi. Sau đó handoff cho Stage 04/06 là config DTO, state path/revision, lock/Store APIs, legacy migration rule và failure modes.
 ## Acceptance và verification
 
 - Config absent dùng defaults; config invalid fail rõ mà không chạy agent.
