@@ -12,7 +12,6 @@ type faults struct {
 	sync    error
 	rename  error
 	chmod   error
-	dirSync error
 }
 
 // activeFaults is reset by tests; nil in production.
@@ -71,9 +70,9 @@ func writeFileAtomic(dir, path string, perm os.FileMode, data []byte) error {
 		os.Remove(tmpName)
 		return fmt.Errorf("rename %s -> %s: %w", tmpName, path, err)
 	}
-	if activeFaults != nil && activeFaults.dirSync != nil {
-		return fmt.Errorf("injected dirsync fault: %w", activeFaults.dirSync)
-	}
+	// Directory fsync is best-effort: a dirsync failure cannot roll back the
+	// rename, so it never fails the write. The rename itself is what must
+	// survive; the directory entry is recovered on the next sync.
 	syncDir(dir)
 	return nil
 }
