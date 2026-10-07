@@ -12,18 +12,18 @@ Tìm agent cài trên máy và resolve workspace/Git context nhanh, chính xác,
 
 ## Checklist thực thi
 
-- [ ] Discovery dùng PATH và extra_paths có precedence, canonical path và executable permission checks; dedupe symlink/binary, không scan toàn filesystem.
-- [ ] Configured provider overrides theo stable ID rõ ràng; collision name/ID báo lỗi thay vì launch binary bất ngờ.
-- [ ] Version/identity probes có context timeout, output cap, concurrency limit và cache; không chạy command interactive chỉ để detect version.
-- [ ] Built-in launch mặc định chỉ binary/argv tối thiểu đã kiểm tra; không đoán flags session/resume của vendor.
-- [ ] Generic provider nhận executable và argv chính xác, workspace thành cwd; mọi shell expansion là lựa chọn explicit của người cấu hình.
-- [ ] OMP/Orca xác minh coding-agent identity, không coi mọi `orca` executable là coding tool; trên Linux có thể trùng screen reader. Không chạy binary chưa rõ identity để dò bằng hành vi có side effect.
-- [ ] Detection trả available/not-found/invalid/uncertain + reason/version provenance; không ép “available” từ tên binary.
-- [ ] Nguồn workspace: current cwd, explicit CLI path, config và recent paths. Validate existing directory, readability/cwd access, expand tilde và canonical symlink policy.
-- [ ] Workspace identity theo canonical directory; Git metadata không thay thế cwd bằng repo root nếu user chọn subdirectory.
-- [ ] Git CLI có timeout; repo root/branch/detached HEAD/worktree/bare/no-Git/permission handled; `status --porcelain=v1 -z` hoặc v2 -z theo parser contract.
-- [ ] Đếm changed files theo record Git, không đếm dòng: rename/untracked/unmerged/filename newline cần fixtures.
-- [ ] Cache Git theo TTL và refresh có cancel; slow repository không block launcher.
+- [x] Discovery dùng PATH và extra_paths có precedence, canonical path và executable permission checks; dedupe symlink/binary, không scan toàn filesystem.
+- [x] Configured provider overrides theo stable ID rõ ràng; collision name/ID báo lỗi thay vì launch binary bất ngờ.
+- [x] Version/identity probes có context timeout, output cap, concurrency limit và cache; không chạy command interactive chỉ để detect version.
+- [x] Built-in launch mặc định chỉ binary/argv tối thiểu đã kiểm tra; không đoán flags session/resume của vendor.
+- [x] Generic provider nhận executable và argv chính xác, workspace thành cwd; mọi shell expansion là lựa chọn explicit của người cấu hình.
+- [x] OMP/Orca xác minh coding-agent identity, không coi mọi `orca` executable là coding tool; trên Linux có thể trùng screen reader. Không chạy binary chưa rõ identity để dò bằng hành vi có side effect.
+- [x] Detection trả available/not-found/invalid/uncertain + reason/version provenance; không ép “available” từ tên binary.
+- [x] Nguồn workspace: current cwd, explicit CLI path, config và recent paths. Validate existing directory, readability/cwd access, expand tilde và canonical symlink policy.
+- [x] Workspace identity theo canonical directory; Git metadata không thay thế cwd bằng repo root nếu user chọn subdirectory.
+- [x] Git CLI có timeout; repo root/branch/detached HEAD/worktree/bare/no-Git/permission handled; `status --porcelain=v1 -z` hoặc v2 -z theo parser contract.
+- [x] Đếm changed files theo record Git, không đếm dòng: rename/untracked/unmerged/filename newline cần fixtures.
+- [x] Cache Git theo TTL và refresh có cancel; slow repository không block launcher.
 
 ## Acceptance và verification
 
