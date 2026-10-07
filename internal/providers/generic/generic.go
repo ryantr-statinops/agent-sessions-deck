@@ -13,11 +13,11 @@ import (
 
 // Provider launches an arbitrary executable with literal arguments.
 type Provider struct {
-	id    agent.ID
-	name  string
-	exec  string
-	args  []string
-	caps  agent.Capabilities
+	id   agent.ID
+	name string
+	exec string
+	args []string
+	caps agent.Capabilities
 }
 
 // New validates the definition and copies the argv.

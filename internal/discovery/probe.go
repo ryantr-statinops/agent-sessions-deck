@@ -24,8 +24,8 @@ const (
 // Result is the observed provenance of one probe. OutputCap bytes are kept;
 // longer vendor banners are truncated, never trusted fully.
 type Result struct {
-	Path    string
-	Status  Status
+	Path   string
+	Status Status
 	// Output is the capped, first-line-joined probe output.
 	Output   string
 	Reason   string
