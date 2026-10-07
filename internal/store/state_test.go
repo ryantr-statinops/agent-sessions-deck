@@ -102,3 +102,47 @@ func TestStateStoreBoundedRecentList(t *testing.T) {
 		t.Fatalf("recent list = %d", len(loaded.RecentWorkspaces))
 	}
 }
+
+func TestStateStoreRejectsTrailingJSON(t *testing.T) {
+	st := newTestStateStore(t)
+	if err := os.WriteFile(st.path, []byte(`{"schema_version":1,"revision":1,"recent_workspaces":[]} {}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Load(context.Background()); err == nil {
+		t.Fatal("trailing JSON value must be rejected")
+	}
+}
+
+func TestStateStoreRejectsNullOrMissingRecentWorkspaces(t *testing.T) {
+	st := newTestStateStore(t)
+	for _, image := range []string{
+		`{"schema_version":1,"revision":1,"recent_workspaces":null}`,
+		`{"schema_version":1,"revision":1}`,
+	} {
+		if err := os.WriteFile(st.path, []byte(image), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Load(context.Background()); err == nil {
+			t.Fatalf("invalid state image accepted: %s", image)
+		}
+	}
+}
+
+func TestStateStoreRejectsEmptyRecentPathAndPersistsUTC(t *testing.T) {
+	st := newTestStateStore(t)
+	if _, err := st.AddRecent(context.Background(), "", time.Now()); err == nil {
+		t.Fatal("empty recent path must be rejected before writing")
+	}
+	zone := time.FixedZone("plus-two", 2*60*60)
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, zone)
+	if _, err := st.AddRecent(context.Background(), "/tmp/workspace", at); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := st.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.RecentWorkspaces[0].LastUsed.Location(); got != time.UTC {
+		t.Fatalf("LastUsed location = %v, want UTC", got)
+	}
+}

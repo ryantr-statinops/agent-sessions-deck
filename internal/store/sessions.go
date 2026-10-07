@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -135,11 +136,18 @@ func decodeSessionsEnvelope(path string, data []byte) ([]session.Session, uint64
 	if err := dec.Decode(&env); err != nil {
 		return nil, 0, &CorruptStateError{File: path, Err: err}
 	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return nil, 0, &CorruptStateError{File: path, Err: errors.New("trailing data after the sessions envelope")}
+	}
 	if env.SchemaVersion != SessionsSchemaVersion {
 		if env.SchemaVersion > SessionsSchemaVersion {
 			return nil, 0, &FutureSchemaError{File: path, SchemaVersion: env.SchemaVersion, SupportedMax: SessionsSchemaVersion}
 		}
 		return nil, 0, &CorruptStateError{File: path, Err: fmt.Errorf("unsupported schema_version %d", env.SchemaVersion)}
+	}
+	if len(env.Sessions) == 0 || bytes.Equal(bytes.TrimSpace(env.Sessions), []byte("null")) {
+		return nil, 0, &CorruptStateError{File: path, Err: errors.New("sessions payload must be an array, not missing or null")}
 	}
 	sessions, err := session.DecodeSessions(bytes.NewReader(env.Sessions))
 	if err != nil {
