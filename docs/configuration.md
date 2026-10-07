@@ -18,7 +18,9 @@ Persistent state is JSON with `schema_version`/`revision` envelopes; `sessions.j
 ## Schema
 
 ```yaml
-refresh: 2s
+general:
+  refresh_interval: 2s
+  session_backend: pty
 discovery:
   extra_paths: [~/.local/bin, /opt/agents/bin]
 agents:
@@ -33,14 +35,15 @@ terminal:
   max_input_queue: 65536
 ```
 
-Defaults: `refresh: 2s`, `terminal.scrollback: 10000`, `terminal.max_input_queue: 65536`, empty agents/workspaces/extra_paths.
+Defaults: `general.refresh_interval: 2s`, `general.session_backend: pty`, `terminal.scrollback: 10000`, `terminal.max_input_queue: 65536`, empty agents/workspaces/extra_paths.
 
 Validation rules (all errors name the file and key):
 
 - unknown keys are refused (strict parse);
 - duplicate keys at any mapping level are refused;
-- a config document must contain exactly one YAML document;
-- `refresh` must parse as a duration (e.g. `2s`);
+- a config document must contain exactly one YAML document, and a malformed trailing document is refused;
+- `general.refresh_interval` must parse as a duration (e.g. `2s`) and be positive;
+- `general.session_backend` must be `pty`;
 - agent IDs must satisfy the stable-ID grammar and be unique;
 - `name`, `executable`, and workspace `path` must be non-empty;
 - `terminal.scrollback` and `terminal.max_input_queue` must be positive.
