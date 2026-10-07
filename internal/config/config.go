@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"strings"
@@ -18,8 +19,8 @@ import (
 // file/key errors; nothing in here is an environment dump and nothing here
 // is persisted as session state (that belongs to state.json).
 type Config struct {
-	// Refresh is how often the dashboard re-reads metadata, e.g. "2s".
-	Refresh string `yaml:"refresh"`
+	// General holds the dashboard-wide knobs.
+	General General `yaml:"general"`
 	// Discovery holds PATH-adjacent knobs.
 	Discovery Discovery `yaml:"discovery"`
 	// Agents are the declared launchable agents, explicitly listed.
@@ -28,6 +29,14 @@ type Config struct {
 	Workspaces []Workspace `yaml:"workspaces"`
 	// Terminal bounds the interactive terminal resources.
 	Terminal Terminal `yaml:"terminal"`
+}
+
+// General holds the dashboard-wide runtime knobs.
+type General struct {
+	// RefreshInterval is how often the dashboard re-reads metadata, e.g. "2s".
+	RefreshInterval string `yaml:"refresh_interval"`
+	// SessionBackend selects the terminal backend; only "pty" is supported.
+	SessionBackend string `yaml:"session_backend"`
 }
 
 // Discovery configures how Stage 04 probes for agent executables.
@@ -67,7 +76,7 @@ type Terminal struct {
 // directory: it is inert until a store opens under it.
 func Default() Config {
 	return Config{
-		Refresh:    "2s",
+		General:    General{RefreshInterval: "2s", SessionBackend: "pty"},
 		Discovery:  Discovery{ExtraPaths: []string{}},
 		Agents:     []Agent{},
 		Workspaces: []Workspace{},
@@ -77,9 +86,12 @@ func Default() Config {
 
 // RefreshDuration parses the refresh setting.
 func (c Config) RefreshDuration() (time.Duration, error) {
-	d, err := time.ParseDuration(c.Refresh)
+	d, err := time.ParseDuration(c.General.RefreshInterval)
 	if err != nil {
-		return 0, fmt.Errorf("refresh %q is not a valid duration (example: \"2s\"): %w", c.Refresh, err)
+		return 0, fmt.Errorf("general.refresh_interval %q is not a valid duration (example: \"2s\"): %w", c.General.RefreshInterval, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("general.refresh_interval must be positive, got %q", c.General.RefreshInterval)
 	}
 	return d, nil
 }
@@ -90,6 +102,9 @@ func (c Config) RefreshDuration() (time.Duration, error) {
 func (c Config) Validate() error {
 	if _, err := c.RefreshDuration(); err != nil {
 		return err
+	}
+	if c.General.SessionBackend != "pty" {
+		return fmt.Errorf("general.session_backend must be \"pty\", got %q", c.General.SessionBackend)
 	}
 	if c.Terminal.Scrollback <= 0 {
 		return fmt.Errorf("terminal.scrollback must be positive, got %d", c.Terminal.Scrollback)
@@ -178,6 +193,8 @@ func Parse(data []byte) (Config, error) {
 	var extra any
 	if err := decoder.Decode(&extra); err == nil {
 		return Config{}, fmt.Errorf("config must be exactly one YAML document, but contains multiple documents")
+	} else if err != io.EOF {
+		return Config{}, fmt.Errorf("config has a malformed trailing YAML document: %w", err)
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -217,14 +234,4 @@ func checkDuplicateKeysInNode(node *yaml.Node) error {
 		}
 	}
 	return nil
-}
-
-// Save marshals the config with the current YAML conventions; it exists so
-// example generation and tests share the exact same tag layout as Load.
-func (c Config) Save() ([]byte, error) {
-	out, err := yaml.Marshal(c)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }

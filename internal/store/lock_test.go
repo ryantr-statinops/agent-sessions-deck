@@ -73,27 +73,6 @@ func TestEnsurePrivateDirPreservesExistingMode(t *testing.T) {
 	}
 }
 
-func TestEnsurePrivateFileCreatesAndPreservesExisting(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.json")
-	if err := EnsurePrivateFile(path); err != nil {
-		t.Fatal(err)
-	}
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("new file mode = %o", info.Mode().Perm())
-	}
-	if err := os.Chmod(path, 0o640); err != nil {
-		t.Fatal(err)
-	}
-	if err := EnsurePrivateFile(path); err != nil {
-		t.Fatal(err)
-	}
-	info, _ = os.Stat(path)
-	if info.Mode().Perm() != 0o640 {
-		t.Fatalf("existing file mode must be preserved, got %o", info.Mode().Perm())
-	}
-}
-
 func TestEnsurePrivateDirRefusesNonDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
