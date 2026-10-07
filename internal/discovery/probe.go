@@ -151,7 +151,7 @@ func RequireMarker(r Result, marker string) Result {
 	if r.Status != StatusAvailable {
 		return r
 	}
-	if strings.Contains(r.Output, marker) {
+	if strings.Contains(strings.ToLower(r.Output), strings.ToLower(marker)) {
 		return r
 	}
 	r.Status = StatusUncertain
