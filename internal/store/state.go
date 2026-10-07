@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -106,21 +107,41 @@ func (s *StateStore) loadUnlocked(ctx context.Context) (StatePayload, error) {
 
 // decodeState strict-decodes the state document.
 func decodeState(path string, data []byte) (StatePayload, error) {
-	var state StatePayload
+	var wire struct {
+		SchemaVersion    int             `json:"schema_version"`
+		Revision         uint64          `json:"revision"`
+		RecentWorkspaces json.RawMessage `json:"recent_workspaces"`
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&state); err != nil {
+	if err := dec.Decode(&wire); err != nil {
 		return StatePayload{}, &CorruptStateError{File: path, Err: err}
 	}
-	if state.SchemaVersion > StateSchemaVersion {
-		return StatePayload{}, &FutureSchemaError{File: path, SchemaVersion: state.SchemaVersion, SupportedMax: StateSchemaVersion}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return StatePayload{}, &CorruptStateError{File: path, Err: errors.New("trailing data after the state envelope")}
 	}
-	if state.SchemaVersion != StateSchemaVersion {
-		return StatePayload{}, &CorruptStateError{File: path, Err: fmt.Errorf("unsupported schema_version %d", state.SchemaVersion)}
+	if wire.SchemaVersion > StateSchemaVersion {
+		return StatePayload{}, &FutureSchemaError{File: path, SchemaVersion: wire.SchemaVersion, SupportedMax: StateSchemaVersion}
 	}
-	if state.RecentWorkspaces == nil {
-		state.RecentWorkspaces = []RecentWorkspace{}
+	if wire.SchemaVersion != StateSchemaVersion {
+		return StatePayload{}, &CorruptStateError{File: path, Err: fmt.Errorf("unsupported schema_version %d", wire.SchemaVersion)}
 	}
+	if len(wire.RecentWorkspaces) == 0 || bytes.Equal(bytes.TrimSpace(wire.RecentWorkspaces), []byte("null")) {
+		return StatePayload{}, &CorruptStateError{File: path, Err: errors.New("recent_workspaces payload must be an array, not missing or null")}
+	}
+	var state StatePayload
+	sub := json.NewDecoder(bytes.NewReader(wire.RecentWorkspaces))
+	sub.DisallowUnknownFields()
+	state.RecentWorkspaces = []RecentWorkspace{}
+	if err := sub.Decode(&state.RecentWorkspaces); err != nil {
+		return StatePayload{}, &CorruptStateError{File: path, Err: err}
+	}
+	if err := sub.Decode(&extra); err != io.EOF {
+		return StatePayload{}, &CorruptStateError{File: path, Err: errors.New("trailing data inside recent_workspaces")}
+	}
+	state.SchemaVersion = wire.SchemaVersion
+	state.Revision = wire.Revision
 	for i := range state.RecentWorkspaces {
 		if state.RecentWorkspaces[i].Path == "" {
 			return StatePayload{}, &CorruptStateError{File: path, Err: fmt.Errorf("recent_workspaces[%d].path is empty", i)}
@@ -163,11 +184,14 @@ func (s *StateStore) Commit(ctx context.Context, state StatePayload, expectedRev
 func (s *StateStore) AddRecent(ctx context.Context, path string, at time.Time) (uint64, error) {
 	var next uint64
 	err := s.withLock(func() error {
+		if path == "" {
+			return errors.New("recent workspace path must not be empty")
+		}
 		current, err := s.loadUnlocked(ctx)
 		if err != nil {
 			return err
 		}
-		next2 := []RecentWorkspace{{Path: path, LastUsed: at}}
+		next2 := []RecentWorkspace{{Path: path, LastUsed: at.UTC()}}
 		for _, recent := range current.RecentWorkspaces {
 			if recent.Path == path {
 				continue

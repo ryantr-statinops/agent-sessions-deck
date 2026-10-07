@@ -235,3 +235,24 @@ func TestOwnerStateStoreOperationsRunWhileLockHeld(t *testing.T) {
 		t.Fatalf("owner Commit: %v %d", err, rev)
 	}
 }
+
+func TestSessionsStoreRejectsTrailingJSON(t *testing.T) {
+	st := newTestStore(t)
+	data := []byte(`{"schema_version":1,"revision":1,"sessions":[]} {}`)
+	if err := os.WriteFile(st.path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.Load(context.Background()); err == nil {
+		t.Fatal("trailing JSON value must be rejected")
+	}
+}
+
+func TestSessionsStoreRejectsNullPayload(t *testing.T) {
+	st := newTestStore(t)
+	if err := os.WriteFile(st.path, []byte(`{"schema_version":1,"revision":1,"sessions":null}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.Load(context.Background()); err == nil {
+		t.Fatal("sessions payload must be an array, not null")
+	}
+}
