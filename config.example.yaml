@@ -5,8 +5,11 @@
 # duplicate keys, duplicate agent IDs, invalid durations and empty
 # executables are refused with a file/key error.
 
-# How often the dashboard re-reads session metadata.
-refresh: 2s
+general:
+  # How often the dashboard re-reads session metadata.
+  refresh_interval: 2s
+  # Terminal backend; only pty is supported.
+  session_backend: pty
 
 discovery:
   # Additional directories scanned for agent executables after PATH.
