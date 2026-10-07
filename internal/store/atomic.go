@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // faults lets white-box tests inject disk failures at each step of the
@@ -18,14 +19,15 @@ type faults struct {
 var activeFaults *faults
 
 // writeFileAtomic writes data through a temp file in the same directory:
-// exclusive-create temp, write, chmod 0600, fsync, atomic rename, directory
-// sync. A failure at any step keeps the previous file untouched; a failure
-// never presents a truncated file as current.
+// create temp (os.CreateTemp, mode 0600), write, set the mode, fsync,
+// atomic rename, directory sync. A failure at any step keeps the previous
+// file untouched and removes the temp file; a failure never presents a
+// truncated file as current.
 func writeFileAtomic(dir, path string, perm os.FileMode, data []byte) error {
 	if err := EnsurePrivateDir(dir); err != nil {
 		return err
 	}
-	tmp, err := CreatePrivateFile(path + ".tmp." + tmpSuffix())
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp.*")
 	if err != nil {
 		return err
 	}
@@ -35,12 +37,24 @@ func writeFileAtomic(dir, path string, perm os.FileMode, data []byte) error {
 		os.Remove(tmpName)
 	}
 	if activeFaults != nil && activeFaults.write != nil {
+		// Simulate a short write that errors partway through the payload.
+		tmp.Write(data[:len(data)/2])
 		cleanup()
 		return fmt.Errorf("injected write fault: %w", activeFaults.write)
 	}
 	if _, err := tmp.Write(data); err != nil {
 		cleanup()
 		return fmt.Errorf("write %s: %w", tmpName, err)
+	}
+	if activeFaults != nil && activeFaults.chmod != nil {
+		cleanup()
+		return fmt.Errorf("injected chmod fault: %w", activeFaults.chmod)
+	}
+	// Set the final mode before the fsync, so the bytes that become durable
+	// are the bytes that carry the intended mode.
+	if err := tmp.Chmod(perm); err != nil {
+		cleanup()
+		return err
 	}
 	if activeFaults != nil && activeFaults.sync != nil {
 		cleanup()
@@ -49,14 +63,6 @@ func writeFileAtomic(dir, path string, perm os.FileMode, data []byte) error {
 	if err := tmp.Sync(); err != nil {
 		cleanup()
 		return fmt.Errorf("fsync %s: %w", tmpName, err)
-	}
-	if activeFaults != nil && activeFaults.chmod != nil {
-		cleanup()
-		return fmt.Errorf("injected chmod fault: %w", activeFaults.chmod)
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		cleanup()
-		return err
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpName)
@@ -87,13 +93,4 @@ func syncDir(dir string) {
 	}
 	defer d.Close()
 	d.Sync()
-}
-
-// tmpSuffix returns a per-attempt uniqueness tag so a failed previous
-// attempt's temp file never collides.
-var tmpCounter uint64
-
-func tmpSuffix() string {
-	tmpCounter++
-	return fmt.Sprintf("%d", tmpCounter)
 }
