@@ -111,3 +111,83 @@ func TestMigrateLegacyCorruptSourceFailsSafe(t *testing.T) {
 func newTestStoreAt(path, lockPath string) *SessionsStore {
 	return NewSessionsStore(path, lockPath)
 }
+
+func TestMigrateLegacyBackupIsPrivateAndFresh(t *testing.T) {
+	dir := t.TempDir()
+	legacy, _ := legacyFixture(t, dir)
+	dest := filepath.Join(t.TempDir(), "sessions.json")
+	imported, err := MigrateLegacySessions(context.Background(), legacy, dest, filepath.Join(t.TempDir(), ".lock"))
+	if err != nil || !imported {
+		t.Fatalf("import = %v, %v", imported, err)
+	}
+	info, err := os.Stat(legacy + ".backup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("backup mode = %o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestMigrateLegacyDoesNotOverwriteDifferentExistingBackup(t *testing.T) {
+	dir := t.TempDir()
+	legacy, _ := legacyFixture(t, dir)
+	if err := os.WriteFile(legacy+".backup", []byte("different backup content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "sessions.json")
+	imported, err := MigrateLegacySessions(context.Background(), legacy, dest, filepath.Join(t.TempDir(), ".lock"))
+	if err != nil || !imported {
+		t.Fatalf("import = %v, %v", imported, err)
+	}
+	data, err := os.ReadFile(legacy + ".backup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "different backup content" {
+		t.Fatal("existing backup must not be overwritten")
+	}
+	if _, err := os.Stat(legacy + ".backup.1"); err != nil {
+		t.Fatalf("fresh backup should land at .backup.1: %v", err)
+	}
+}
+
+func TestMigrateLegacyDanglingDestinationSymlinkIsPresent(t *testing.T) {
+	dir := t.TempDir()
+	legacy, _ := legacyFixture(t, dir)
+	destDir := t.TempDir()
+	dest := filepath.Join(destDir, "sessions.json")
+	if err := os.Symlink(filepath.Join(destDir, "no-such-target"), dest); err != nil {
+		t.Fatal(err)
+	}
+	imported, err := MigrateLegacySessions(context.Background(), legacy, dest, filepath.Join(destDir, ".lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported {
+		t.Fatal("dangling destination symlink must count as present")
+	}
+	if _, err := os.Lstat(legacy + ".backup"); err == nil {
+		t.Fatal("no backup should be created when the destination exists")
+	}
+}
+
+func TestMigrateLegacyUnderOwnerLockUsesHeldLock(t *testing.T) {
+	dir := t.TempDir()
+	legacy, _ := legacyFixture(t, dir)
+	destDir := t.TempDir()
+	dest := filepath.Join(destDir, "sessions.json")
+	lock, err := AcquireLock(filepath.Join(destDir, ".lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	imported, err := MigrateLegacySessionsWithLock(context.Background(), legacy, dest, lock)
+	if err != nil || !imported {
+		t.Fatalf("import = %v, %v", imported, err)
+	}
+	sessions, rev, err := NewOwnerSessionsStore(dest, lock).Load(context.Background())
+	if err != nil || rev != 1 || len(sessions) != 1 {
+		t.Fatalf("load = %v %d %v", err, rev, sessions)
+	}
+}
