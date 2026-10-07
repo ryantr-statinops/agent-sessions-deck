@@ -77,6 +77,9 @@ func MigrateLegacySessionsWithLock(ctx context.Context, legacyPath, destPath str
 	}
 	lock.mu.Lock()
 	defer lock.mu.Unlock()
+	if !lock.ownedLocked() {
+		return false, ErrLockReleased
+	}
 	if present, err := destinationPresent(destPath); err != nil {
 		return false, err
 	} else if present {

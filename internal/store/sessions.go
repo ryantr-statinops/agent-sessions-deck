@@ -92,6 +92,9 @@ func (s *SessionsStore) withLock(fn func() error) error {
 	if s.lock != nil {
 		s.lock.mu.Lock()
 		defer s.lock.mu.Unlock()
+		if !s.lock.ownedLocked() {
+			return ErrLockReleased
+		}
 		return fn()
 	}
 	lock, err := AcquireLock(s.lockPath)

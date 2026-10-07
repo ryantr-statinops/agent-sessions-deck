@@ -256,3 +256,118 @@ func TestSessionsStoreRejectsNullPayload(t *testing.T) {
 		t.Fatal("sessions payload must be an array, not null")
 	}
 }
+
+func TestOwnerStoresRefuseOperationsAfterRelease(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".lock")
+	lock, err := AcquireLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := NewOwnerSessionsStore(filepath.Join(dir, "sessions.json"), lock)
+	state := NewOwnerStateStore(filepath.Join(dir, "state.json"), lock)
+	ctx := context.Background()
+	if _, _, err := sessions.Load(ctx); err != nil {
+		t.Fatalf("owner Load before release: %v", err)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if _, _, err := sessions.Load(ctx); err != ErrLockReleased {
+		t.Fatalf("owner Load after release = %v, want ErrLockReleased", err)
+	}
+	if _, err := sessions.Commit(ctx, []session.Session{}, 0); err != ErrLockReleased {
+		t.Fatalf("owner Commit after release = %v, want ErrLockReleased", err)
+	}
+	if _, err := sessions.Delete(ctx, "s1", 0); err != ErrLockReleased {
+		t.Fatalf("owner Delete after release = %v, want ErrLockReleased", err)
+	}
+	if _, err := state.Load(ctx); err != ErrLockReleased {
+		t.Fatalf("owner state Load after release = %v, want ErrLockReleased", err)
+	}
+	if _, err := state.AddRecent(ctx, "/tmp/ws", time.Now()); err != ErrLockReleased {
+		t.Fatalf("owner AddRecent after release = %v, want ErrLockReleased", err)
+	}
+	if _, err := state.Commit(ctx, StatePayload{}, 0); err != ErrLockReleased {
+		t.Fatalf("owner state Commit after release = %v, want ErrLockReleased", err)
+	}
+}
+
+func TestMigrateLegacyWithLockRefusedAfterRelease(t *testing.T) {
+	dir := t.TempDir()
+	lock, err := AcquireLock(filepath.Join(dir, ".lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(dir, "legacy.json")
+	if err := os.WriteFile(legacy, []byte("[]"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = MigrateLegacySessionsWithLock(context.Background(), legacy, filepath.Join(dir, "sessions.json"), lock)
+	if err != ErrLockReleased {
+		t.Fatalf("migration after release = %v, want ErrLockReleased", err)
+	}
+}
+
+func TestLockLifetimeSmokeOwnerCommitReloadOfflineRefusalRelease(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".lock")
+	sessionsPath := filepath.Join(dir, "sessions.json")
+	statePath := filepath.Join(dir, "state.json")
+	ctx := context.Background()
+
+	lock, err := AcquireLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("SMOKE: owner lock acquired")
+	owner := NewOwnerSessionsStore(sessionsPath, lock)
+	ownerState := NewOwnerStateStore(statePath, lock)
+	exited := sampleSession(t)
+	if rev, err := owner.Commit(ctx, []session.Session{exited}, 0); err != nil || rev != 1 {
+		t.Fatalf("owner commit: %v %d", err, rev)
+	}
+	t.Log("SMOKE: owner commit revision 1")
+	if got, rev, err := owner.Load(ctx); err != nil || rev != 1 || len(got) != 1 {
+		t.Fatalf("owner reload: %v %d %d", err, rev, len(got))
+	}
+	if _, err := ownerState.AddRecent(ctx, "/tmp/ws", time.Now().UTC()); err != nil {
+		t.Fatalf("owner AddRecent: %v", err)
+	}
+	t.Log("SMOKE: owner commit reloaded with 1 session and 1 recent workspace")
+
+	offline := NewSessionsStore(sessionsPath, lockPath)
+	if _, _, err := offline.Load(ctx); err != ErrLocked {
+		t.Fatalf("offline load = %v, want ErrLocked", err)
+	}
+	if _, err := NewStateStore(statePath, lockPath).Load(ctx); err != ErrLocked {
+		t.Fatalf("offline state load = %v, want ErrLocked", err)
+	}
+	t.Log("SMOKE: offline stores refused while owner live (ErrLocked)")
+
+	if err := lock.Release(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("SMOKE: lock released, Owned =", lock.Owned())
+	if _, _, err := owner.Load(ctx); err != ErrLockReleased {
+		t.Fatalf("owner load after release = %v, want ErrLockReleased", err)
+	}
+	if rev, err := offline.Commit(ctx, []session.Session{}, 1); err != nil || rev != 2 {
+		t.Fatalf("offline commit after release: %v %d", err, rev)
+	}
+	t.Log("SMOKE: offline mutation succeeds after release (expected revision 2)")
+	offlineState := NewStateStore(statePath, lockPath)
+	if got, err := offlineState.Load(ctx); err != nil || len(got.RecentWorkspaces) != 1 {
+		t.Fatalf("offline reload after release: %v %d", err, len(got.RecentWorkspaces))
+	}
+	t.Log("SMOKE: offline reload after release sees persisted state")
+	relocked, err := AcquireLock(lockPath)
+	if err != nil {
+		t.Fatalf("re-acquire after release: %v", err)
+	}
+	defer relocked.Release()
+	t.Log("SMOKE: lock re-acquirable after release")
+}

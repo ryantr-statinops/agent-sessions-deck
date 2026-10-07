@@ -82,3 +82,30 @@ func TestEnsurePrivateDirRefusesNonDirectory(t *testing.T) {
 		t.Fatal("expected error for non-directory")
 	}
 }
+
+func TestReleaseClearsOwnershipAndIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lock")
+	l, err := AcquireLock(path)
+	if err != nil {
+		t.Fatalf("AcquireLock: %v", err)
+	}
+	if !l.Owned() {
+		t.Fatal("Owned = false before release")
+	}
+	if err := l.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if l.Owned() {
+		t.Fatal("Owned = true after release")
+	}
+	if err := l.Release(); err != nil {
+		t.Fatalf("second Release: %v", err)
+	}
+	var nilLock *Lock
+	if nilLock.Owned() {
+		t.Fatal("nil lock Owned = true")
+	}
+	if err := nilLock.Release(); err != nil {
+		t.Fatalf("nil Release: %v", err)
+	}
+}
