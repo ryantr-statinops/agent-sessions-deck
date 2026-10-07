@@ -28,7 +28,7 @@ func TestScanPrecedenceDedupe(t *testing.T) {
 	os.Symlink(filepath.Join(p1, "agentA"), filepath.Join(p2, "agentA-alias"))
 	writeExe(t, filepath.Join(p1, "agentA"), 0o755) // p1 wins for name agentA
 	writeExe(t, filepath.Join(p2, "agentA"), 0o755) // p2 canonical differs
-	writeExe(t, filepath.Join(x, "agentA"), 0o755)   // extra path loses
+	writeExe(t, filepath.Join(x, "agentA"), 0o755)  // extra path loses
 	writeExe(t, filepath.Join(spaced, "agentB"), 0o755)
 	writeExe(t, filepath.Join(x, "only-extra"), 0o755)
 	os.WriteFile(filepath.Join(p1, "notexec"), []byte("#!/bin/sh\n"), 0o644)
@@ -66,4 +66,3 @@ func TestScanPrecedenceDedupe(t *testing.T) {
 		t.Errorf("missing binary must not be found")
 	}
 }
-

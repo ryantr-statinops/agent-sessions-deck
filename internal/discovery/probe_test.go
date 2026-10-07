@@ -57,7 +57,7 @@ func TestProbeCacheAndInvalidate(t *testing.T) {
 	counter := filepath.Join(root, "counter")
 	os.WriteFile(counter, []byte("#!/bin/sh\nn=$(cat \"$1\"); n=$((n+1)); echo $n > \"$1\"; echo run$n\n"), 0o755)
 	bin := filepath.Join(root, "bin")
-	os.WriteFile(bin, []byte("#!/bin/sh\nexec \"" + counter + "\" \"" + filepath.Join(root, "n") + "\"\n"), 0o755)
+	os.WriteFile(bin, []byte("#!/bin/sh\nexec \""+counter+"\" \""+filepath.Join(root, "n")+"\"\n"), 0o755)
 	os.WriteFile(filepath.Join(root, "n"), []byte("0"), 0o644)
 	p := NewProber(ProbeOptions{TTL: time.Minute, Args: nil})
 	p.opts.Args = nil
@@ -85,4 +85,3 @@ func TestProbeNonInteractive(t *testing.T) {
 		t.Errorf("stdin reader = %+v", r)
 	}
 }
-
