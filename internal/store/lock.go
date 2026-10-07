@@ -13,6 +13,11 @@ import (
 // holds the state-home lock.
 var ErrLocked = errors.New("state home lock is held by another writer")
 
+// ErrLockReleased reports an operation bound to a lifetime lock that has
+// already been released. Owner stores and migrations bound to the lock
+// refuse every operation once it is released.
+var ErrLockReleased = errors.New("state home lock has been released")
+
 // Lock is an flock-based exclusive lock on the state home. The owner keeps
 // it for its whole lifetime; offline mutations (the CLI contract's permitted
 // writes, Stage 06) take it briefly around a read/write. A second holder —
@@ -55,14 +60,36 @@ func AcquireLock(path string) (*Lock, error) {
 	return &Lock{file: f, path: path}, nil
 }
 
-// Release drops the lock and closes the descriptor.
+// Release drops the lock and closes the descriptor. It serializes with
+// every in-flight bound operation through the mutex, and clears the file
+// handle so Owned reports false and later operations are refused. Release
+// is idempotent.
 func (l *Lock) Release() error {
-	if l == nil || l.file == nil {
+	if l == nil {
 		return nil
 	}
-	syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
-	return l.file.Close()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return nil
+	}
+	err := l.file.Close()
+	l.file = nil
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Owned reports whether the lock is still held.
-func (l *Lock) Owned() bool { return l != nil && l.file != nil }
+func (l *Lock) Owned() bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.file != nil
+}
+
+// ownedLocked reports liveness for callers that already hold the mutex.
+func (l *Lock) ownedLocked() bool { return l != nil && l.file != nil }
