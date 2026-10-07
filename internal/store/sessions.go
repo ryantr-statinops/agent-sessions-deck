@@ -66,24 +66,65 @@ func (e *RevisionConflictError) Error() string {
 type SessionsStore struct {
 	path     string
 	lockPath string
+	lock     *Lock
 }
 
 // NewSessionsStore binds the store to sessions.json and the state-home lock.
+// It runs in offline mode: every operation takes the short state-home lock,
+// so it is refused while an owner holds the lock.
 func NewSessionsStore(path, lockPath string) *SessionsStore {
 	return &SessionsStore{path: path, lockPath: lockPath}
 }
 
-// Load returns the stored sessions and revision. Absent file means an empty
-// snapshot at revision 0. Corrupt or future-schema images fail safe.
-func (s *SessionsStore) Load(ctx context.Context) ([]session.Session, uint64, error) {
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return []session.Session{}, 0, nil
-		}
-		return nil, 0, &CorruptStateError{File: s.path, Err: err}
+// NewOwnerSessionsStore binds the store to an already-held lifetime lock.
+// Owner operations reuse the held lock (re-flocking it would fail against
+// itself) and are serialized through the lock's mutex. Load/Commit/Delete
+// must work while the owner holds it.
+func NewOwnerSessionsStore(path string, lock *Lock) *SessionsStore {
+	return &SessionsStore{path: path, lock: lock}
+}
+
+// withLock runs one owner-or-offline operation under the right mutual
+// exclusion: the shared lifetime-lock mutex while an owner store is bound,
+// or a short flock acquisition otherwise.
+func (s *SessionsStore) withLock(fn func() error) error {
+	if s.lock != nil {
+		s.lock.mu.Lock()
+		defer s.lock.mu.Unlock()
+		return fn()
 	}
-	return decodeSessionsEnvelope(s.path, data)
+	lock, err := AcquireLock(s.lockPath)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+	return fn()
+}
+
+// Load returns the stored sessions and revision. Absent file means an empty
+// snapshot at revision 0. Corrupt or future-schema images fail safe. An
+// offline Load takes the short lock and is refused while an owner is live;
+// the owner store reads under the lifetime lock.
+func (s *SessionsStore) Load(ctx context.Context) ([]session.Session, uint64, error) {
+	var sessions []session.Session
+	var revision uint64
+	err := s.withLock(func() error {
+		data, err := os.ReadFile(s.path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				sessions = []session.Session{}
+				revision = 0
+				return nil
+			}
+			return &CorruptStateError{File: s.path, Err: err}
+		}
+		sessions, revision, err = decodeSessionsEnvelope(s.path, data)
+		return err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return sessions, revision, nil
 }
 
 // decodeSessionsEnvelope strict-decodes the envelope and the payload.
@@ -111,52 +152,68 @@ func decodeSessionsEnvelope(path string, data []byte) ([]session.Session, uint64
 // the state-home lock briefly around check-and-write so a concurrent writer
 // is refused (offline mutation rule).
 func (s *SessionsStore) Commit(ctx context.Context, sessions []session.Session, expectedRevision uint64) (uint64, error) {
-	lock, err := AcquireLock(s.lockPath)
+	err := s.withLock(func() error {
+		_, actualRevision, err := s.loadUnlocked(ctx)
+		if err != nil {
+			return err
+		}
+		if actualRevision != expectedRevision {
+			return &RevisionConflictError{File: s.path, Expected: expectedRevision, Actual: actualRevision}
+		}
+		_, err = s.writeRevision(sessions, expectedRevision+1)
+		return err
+	})
 	if err != nil {
 		return 0, err
 	}
-	defer lock.Release()
-	_, actualRevision, err := s.Load(ctx)
+	return expectedRevision + 1, nil
+}
+
+func (s *SessionsStore) loadUnlocked(ctx context.Context) ([]session.Session, uint64, error) {
+	data, err := os.ReadFile(s.path)
 	if err != nil {
-		return 0, err
+		if errors.Is(err, os.ErrNotExist) {
+			return []session.Session{}, 0, nil
+		}
+		return nil, 0, &CorruptStateError{File: s.path, Err: err}
 	}
-	if actualRevision != expectedRevision {
-		return 0, &RevisionConflictError{File: s.path, Expected: expectedRevision, Actual: actualRevision}
-	}
-	return s.writeRevision(sessions, expectedRevision+1)
+	return decodeSessionsEnvelope(s.path, data)
 }
 
 // Delete removes one session, refusing while the session is active (T20) and
 // refusing stale revisions. It is one atomic replace of the remaining
 // snapshot.
 func (s *SessionsStore) Delete(ctx context.Context, id session.ID, expectedRevision uint64) (uint64, error) {
-	lock, err := AcquireLock(s.lockPath)
-	if err != nil {
-		return 0, err
-	}
-	defer lock.Release()
-	sessions, actualRevision, err := s.Load(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if actualRevision != expectedRevision {
-		return 0, &RevisionConflictError{File: s.path, Expected: expectedRevision, Actual: actualRevision}
-	}
-	idx := -1
-	for i := range sessions {
-		if sessions[i].ID == id {
-			idx = i
-			break
+	var next uint64
+	err := s.withLock(func() error {
+		sessions, actualRevision, err := s.loadUnlocked(ctx)
+		if err != nil {
+			return err
 		}
-	}
-	if idx < 0 {
-		return 0, session.NewError(session.CodeNotFound, string(id), "session is not in the store", "list the sessions to see valid ids")
-	}
-	if err := sessions[idx].EnsureDeletable(); err != nil {
+		if actualRevision != expectedRevision {
+			return &RevisionConflictError{File: s.path, Expected: expectedRevision, Actual: actualRevision}
+		}
+		idx := -1
+		for i := range sessions {
+			if sessions[i].ID == id {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return session.NewError(session.CodeNotFound, string(id), "session is not in the store", "list the sessions to see valid ids")
+		}
+		if err := sessions[idx].EnsureDeletable(); err != nil {
+			return err
+		}
+		sessions = append(sessions[:idx], sessions[idx+1:]...)
+		next, err = s.writeRevision(sessions, expectedRevision+1)
+		return err
+	})
+	if err != nil {
 		return 0, err
 	}
-	sessions = append(sessions[:idx], sessions[idx+1:]...)
-	return s.writeRevision(sessions, expectedRevision+1)
+	return next, nil
 }
 
 // writeRevision serializes the snapshot into a new full envelope and

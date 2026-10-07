@@ -136,3 +136,102 @@ func TestSessionsStoreCommitTakesLock(t *testing.T) {
 }
 
 func ctxNoop() context.Context { return context.Background() }
+
+func TestSessionsStoreCommitCreatesMissingStateHome(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, ".local", "state", "asd")
+	st := NewSessionsStore(filepath.Join(stateDir, "sessions.json"), filepath.Join(stateDir, ".lock"))
+	revision, err := st.Commit(context.Background(), []session.Session{}, 0)
+	if err != nil {
+		t.Fatalf("first Commit in absent state home: %v", err)
+	}
+	if revision != 1 {
+		t.Fatalf("revision = %d, want 1", revision)
+	}
+}
+
+func TestOwnerSessionsStoreOperationsRunWhileLockHeld(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".lock")
+	lock, err := AcquireLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	st := NewOwnerSessionsStore(filepath.Join(dir, "sessions.json"), lock)
+	ctx := context.Background()
+	if _, _, err := st.Load(ctx); err != nil {
+		t.Fatalf("owner Load: %v", err)
+	}
+	exited := sampleSession(t)
+	end := time.Now().UTC().Truncate(time.Second)
+	attempt := session.NewAttempt(1, end.Add(-time.Minute))
+	attempt.ExitCode = 0
+	attempt.HasExitCode = true
+	attempt.Lifecycle = session.LifecycleExited
+	attempt.EndedAt = end
+	attempt.Reason = session.Reason{Kind: session.ReasonNaturalExit, ExitCode: &attempt.ExitCode}
+	exited.Attempts = []session.Attempt{attempt}
+	exited.Generation = 1
+	rev, err := st.Commit(ctx, []session.Session{exited}, 0)
+	if err != nil || rev != 1 {
+		t.Fatalf("owner Commit: %v %d", err, rev)
+	}
+	if _, _, err := st.Load(ctx); err != nil {
+		t.Fatalf("owner Load after Commit: %v", err)
+	}
+	next, err := st.Delete(ctx, exited.ID, 1)
+	if err != nil || next != 2 {
+		t.Fatalf("owner Delete: %v %d", err, next)
+	}
+}
+
+func TestOfflineStoreRefusedWhileOwnerLive(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".lock")
+	lock, err := AcquireLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	sessions := NewSessionsStore(filepath.Join(dir, "sessions.json"), lockPath)
+	if _, _, err := sessions.Load(context.Background()); err != ErrLocked {
+		t.Fatalf("offline Load = %v, want ErrLocked", err)
+	}
+	if _, err := sessions.Commit(context.Background(), []session.Session{}, 0); err != ErrLocked {
+		t.Fatalf("offline Commit = %v, want ErrLocked", err)
+	}
+	st := NewStateStore(filepath.Join(dir, "state.json"), lockPath)
+	if _, err := st.Load(context.Background()); err != ErrLocked {
+		t.Fatalf("offline state Load = %v, want ErrLocked", err)
+	}
+	if _, err := st.AddRecent(context.Background(), "/tmp/ws", time.Now()); err != ErrLocked {
+		t.Fatalf("offline AddRecent = %v, want ErrLocked", err)
+	}
+}
+
+func TestOwnerStateStoreOperationsRunWhileLockHeld(t *testing.T) {
+	dir := t.TempDir()
+	lock, err := AcquireLock(filepath.Join(dir, ".lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	st := NewOwnerStateStore(filepath.Join(dir, "state.json"), lock)
+	ctx := context.Background()
+	if _, err := st.Load(ctx); err != nil {
+		t.Fatalf("owner Load: %v", err)
+	}
+	rev, err := st.AddRecent(ctx, "/tmp/ws", time.Now().UTC())
+	if err != nil || rev != 1 {
+		t.Fatalf("owner AddRecent: %v %d", err, rev)
+	}
+	loaded, err := st.Load(ctx)
+	if err != nil || len(loaded.RecentWorkspaces) != 1 {
+		t.Fatalf("owner Load: %v %+v", err, loaded)
+	}
+	rev, err = st.Commit(ctx, StatePayload{}, 1)
+	if err != nil || rev != 2 {
+		t.Fatalf("owner Commit: %v %d", err, rev)
+	}
+}
