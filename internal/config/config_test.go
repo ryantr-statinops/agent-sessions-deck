@@ -13,7 +13,7 @@ func TestLoadAbsentConfigUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Refresh != "2s" || cfg.Terminal.Scrollback != 10000 || cfg.Terminal.MaxInputQueue != 65536 {
+	if cfg.General.RefreshInterval != "2s" || cfg.Terminal.Scrollback != 10000 || cfg.Terminal.MaxInputQueue != 65536 {
 		t.Fatalf("defaults = %+v", cfg)
 	}
 	if len(cfg.Agents) != 0 || len(cfg.Workspaces) != 0 {
@@ -23,7 +23,9 @@ func TestLoadAbsentConfigUsesDefaults(t *testing.T) {
 
 func TestParseValidConfig(t *testing.T) {
 	cfg, err := Parse([]byte(`
-refresh: 3s
+general:
+  refresh_interval: 3s
+  session_backend: pty
 discovery:
   extra_paths:
     - /opt/agents/bin
@@ -41,7 +43,7 @@ terminal:
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if cfg.Refresh != "3s" || cfg.Terminal.Scrollback != 5000 {
+	if cfg.General.RefreshInterval != "3s" || cfg.Terminal.Scrollback != 5000 {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 	if len(cfg.Agents) != 1 || cfg.Agents[0].ID != "opencode" || cfg.Agents[0].Args[1] != "--model" {
@@ -54,21 +56,21 @@ terminal:
 }
 
 func TestParseRejectsUnknownKey(t *testing.T) {
-	_, err := Parse([]byte("refresh: 2s\nunknown_key: true\n"))
+	_, err := Parse([]byte("refresh_interval: 2s\nunknown_key: true\n"))
 	if err == nil || !strings.Contains(err.Error(), "unknown_key") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestParseRejectsDuplicateYAMLDocument(t *testing.T) {
-	_, err := Parse([]byte("refresh: 2s\n---\nrefresh: 3s\n"))
+	_, err := Parse([]byte("general:\n  refresh_interval: 2s\n---\ngeneral:\n  refresh_interval: 3s\n"))
 	if err == nil || !strings.Contains(err.Error(), "multiple documents") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestParseRejectsDuplicateKeys(t *testing.T) {
-	_, err := Parse([]byte("refresh: 2s\nrefresh: 3s\n"))
+	_, err := Parse([]byte("general:\n  refresh_interval: 2s\n  refresh_interval: 3s\n"))
 	if err == nil || !strings.Contains(err.Error(), "duplicate key") {
 		t.Fatalf("err = %v", err)
 	}
@@ -85,8 +87,8 @@ agents:
 }
 
 func TestParseRejectsInvalidDuration(t *testing.T) {
-	_, err := Parse([]byte("refresh: soon\n"))
-	if err == nil || !strings.Contains(err.Error(), "refresh") {
+	_, err := Parse([]byte("general:\n  refresh_interval: soon\n"))
+	if err == nil || !strings.Contains(err.Error(), "refresh_interval") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -148,10 +150,26 @@ func TestParseErrorNamesFileAndKey(t *testing.T) {
 func TestLoadPresentInvalidConfigFails(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte("refresh: nope\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("general:\n  refresh_interval: nope\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(path); err == nil {
 		t.Fatal("invalid config must not silently fall back to defaults")
+	}
+}
+
+func TestParseRejectsNonPositiveRefreshInterval(t *testing.T) {
+	for _, d := range []string{"0s", "-1s"} {
+		_, err := Parse([]byte("general:\n  refresh_interval: " + d + "\n"))
+		if err == nil || !strings.Contains(err.Error(), "refresh_interval") {
+			t.Fatalf("%s: err = %v", d, err)
+		}
+	}
+}
+
+func TestParseRejectsMalformedTrailingYAMLDocument(t *testing.T) {
+	_, err := Parse([]byte("general:\n  refresh_interval: 2s\n---\n: [unclosed\n"))
+	if err == nil || !strings.Contains(err.Error(), "malformed trailing") {
+		t.Fatalf("err = %v", err)
 	}
 }

@@ -49,30 +49,11 @@ func TestAgentRedaction(t *testing.T) {
 	if redacted := a.RedactedCommand(); redacted != "/bin/agent [redacted]" {
 		t.Fatalf("redacted = %q", redacted)
 	}
-	if a.RedactedCommand() == a.CommandLine() {
-		t.Fatal("redacted form must differ from the literal argv display")
+	if strings.Contains(a.RedactedCommand(), "secret") {
+		t.Fatal("redacted form must not leak argv secrets")
 	}
 	plain := Agent{ID: "a", Name: "A", Executable: "/bin/agent"}
 	if plain.RedactedCommand() != "/bin/agent" {
 		t.Fatalf("no-arg redaction = %q", plain.RedactedCommand())
-	}
-}
-
-func TestCommandLineIsNeverExecutedThroughShell(t *testing.T) {
-	cfg, err := Parse([]byte(`
-agents:
-  - id: custom
-    name: Custom
-    executable: /bin/echo
-    args: ["$(touch /tmp/asd-should-not-execute)"]
-`))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	if strings.Contains(cfg.Agents[0].CommandLine(), "&&") {
-		t.Fatal("join with spaces only for display")
-	}
-	if cfg.Agents[0].Args[0] != "$(touch /tmp/asd-should-not-execute)" {
-		t.Fatal("argv must stay literal")
 	}
 }

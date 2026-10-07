@@ -67,31 +67,3 @@ func mkdirPrivateRecursive(path string) error {
 	}
 	return err
 }
-
-// EnsurePrivateFile creates an empty file with mode 0600. An existing file
-// keeps its mode — never chmod a user file destructively without notice —
-// and an existing directory path fails loudly.
-func EnsurePrivateFile(path string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil
-		}
-		return err
-	}
-	return f.Close()
-}
-
-// CreatePrivateFile creates a new file with mode 0600, failing if it exists.
-func CreatePrivateFile(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-}
-
-// MkdirTempRaw writes data to a temp file inside a 0700 directory; it is
-// the first step of an atomic replace and keeps intermediate bytes private.
-func MkdirTempFile(dir string) (*os.File, error) {
-	if err := EnsurePrivateDir(dir); err != nil {
-		return nil, err
-	}
-	return os.CreateTemp(dir, ".asd-tmp-*")
-}

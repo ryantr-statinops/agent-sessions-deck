@@ -32,11 +32,3 @@ func (a Agent) RedactedCommand() string {
 	}
 	return a.Executable + " [redacted]"
 }
-
-// CommandLine renders the literal argv for explicit, user-requested display.
-// It is never used for logging: command-line logging stays off by default.
-func (a Agent) CommandLine() string {
-	parts := []string{a.Executable}
-	parts = append(parts, a.Args...)
-	return strings.Join(parts, " ")
-}
