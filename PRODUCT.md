@@ -1422,22 +1422,35 @@ Example:
 
 ```yaml
 general:
-  session_backend: pty
   refresh_interval: 2s
+  session_backend: pty
 
 discovery:
   extra_paths:
     - ~/.local/bin
 
 agents:
-  - name: opencode
-    command: opencode
+  - id: opencode
+    name: opencode
+    executable: opencode
+    args: []
 
-  - name: claude
-    command: claude
+  - id: claude
+    name: claude
+    executable: claude
+    args: []
 
-  - name: custom-asd
-    command: my-asd
+  - id: custom-asd
+    name: custom-asd
+    executable: my-asd
+    args: []
+
+workspaces:
+  - path: ~/Kestrel
+
+terminal:
+  scrollback: 10000
+  max_input_queue: 65536
 ```
 
 Configuration should remain intentionally small.
