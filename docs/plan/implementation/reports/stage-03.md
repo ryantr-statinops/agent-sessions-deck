@@ -1,6 +1,6 @@
 # Stage 03 — Config and persistent state
 
-Trạng thái: PLANNED · Milestone: M1 · Phụ thuộc: 02 · Coordinator review corrections pending.
+Trạng thái: DONE · Milestone: M1 · Phụ thuộc: 02 · Coordinator review corrections closed (gate accepted).
 
 ## Kết quả
 
@@ -21,9 +21,16 @@ Chạy trên Linux, offline (vendored), không ghi vào real `$HOME`:
 
 ## Handoff
 
-- **04/06:** config DTO là `config.Config`/`config.Paths` (ConfigFile/SessionsFile/StateFile/LockPath/RuntimeDir); store API là `store.SessionsStore` (Load/Commit/Delete, expected-revision conflict), `store.StateStore` (Load/Commit/AddRecent), `store.NewSessionsStore/NewStateStore`, lock `store.AcquireLock/TryLock` (ErrLocked), failure modes: `CorruptStateError`, `FutureSchemaError`, `RevisionConflictError`; legacy migration chỉ import khi XDG destination absent.
+- **04/06:** config DTO là `config.Config`/`config.Paths` (ConfigFile/SessionsFile/StateFile/LockPath/RuntimeDir); store API là `store.SessionsStore` (Load/Commit/Delete, expected-revision conflict), `store.StateStore` (Load/Commit/AddRecent), `store.NewSessionsStore/NewStateStore` (offline) và `store.NewOwnerSessionsStore/NewOwnerStateStore` (owner-bound lifetime lock), lock `store.AcquireLock`/`Lock.Release`/`Lock.Owned` (`ErrLocked` khi bị chiếm, `ErrLockReleased` cho owner store sau Release); `TryLock` đã bị xóa, offline Load/Commit/Delete/AddRecent tự acquire lock ngắn và từ chối khi owner live, failure modes: `CorruptStateError`, `FutureSchemaError`, `RevisionConflictError`; legacy migration chỉ import khi XDG destination absent.
 - **Commits (ledger order):** `afdacbc` W1-03.01 XDG paths; `f6124dd` W1-03.02 strict config; `9a32d69` W1-03.03 argv/tilde/redaction; `0f4d386` W1-03.04 permissions+lock; `bf83d32` W1-03.05 sessions store; `7f861bf` W1-03.06 state store; `38929bb` W1-03.07 atomic faults; `a3512d6` gofmt fault struct; `c868c3b` W1-03.08 legacy import; `204bf09` W1-03.09 config.example.yaml; `931e09a` W1-03.10 docs/configuration.md. Dependency commit (coordinator): `17aaa4c`.
 - **Remaining limits:** `XDG_RUNTIME_DIR` fallback path chưa quyết định (Stage 06); SQLite/event DB chưa có (Stage 13); no two-file transactions by design; recent-workspaces không gắn vào config file; argv có thể chứa secret nên display mặc định redact.
+
+## Gate evidence (final throwaway run, isolated temp home)
+
+- Throwaway in-module Go program (added, run, then deleted; not a test named smoke; no script kept): isolated temp home via XDG overrides; `config.ResolvePaths` OK; absent config loads defaults (`refresh_interval=2s`, `session_backend=pty`); written config reloads via `config.Load`; owner `AcquireLock` OK; owner `SessionsStore.Commit` rev 0->1, `StateStore.Commit` rev 0->1; owner `Load` reloads rev 1; second sessions commit rev 2; `StateStore.AddRecent` rev 2; offline `SessionsStore.Load/Commit` and `StateStore.Commit` refused with `ErrLocked` while owner live; second `AcquireLock` refused; after `Lock.Release`: owner ops fail `ErrLockReleased`, `Owned()` false, offline `Load` rev 2, offline state `Commit` rev 3, lock re-acquirable; `sessions.json` (60B) and `state.json` (162B) envelopes on disk. All 21 assertions PASS; nothing written outside the temp home.
+- `make check` — PASS at HEAD `cf23ef3` (fmt-check, go vet unit+integration, unit suite, integration suite, `bin/asd --help/--version`).
+- `make test-race` (`go test -tags=integration -race -timeout 15m ./...`) — PASS, all packages ok.
+- Model thực tế: `opencode/fledge-alpha-free` (OpenCode configured default; Orca receipt `model: null`; không override).
 
 ## Review
 
@@ -34,4 +41,4 @@ Coordinator review after the worker handoff found blockers before Stage 04/05 ha
 - Envelope decoders read one JSON value without requiring EOF; trailing JSON can be accepted. Config keys also diverge from PRODUCT.md section 29 refresh/session-backend nesting.
 - Legacy backup permissions and an existing/dangling destination path need safe handling tests.
 
-Follow-up fixes and acceptance are in progress. Keep Stage 03 PLANNED; do not dispatch Stage 04/05 until these findings are closed.
+Follow-up fixes are closed: correction commits `73e25d7`, `a756496`, `20d3a4b`, `b291ce8`, `2c3e808`, `dda747c`, `e56d933`, `cf6fd52`, `5e700bc`, `cf23ef3` all push to origin/dev; gate evidence above recorded 2026-10-07. Stage 03 status moved to DONE in the plan checklist commit.
