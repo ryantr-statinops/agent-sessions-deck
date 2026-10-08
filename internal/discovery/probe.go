@@ -109,8 +109,9 @@ func (p *Prober) Probe(ctx context.Context, path string) Result {
 	cmd := exec.CommandContext(pctx, path, opts.Args...)
 	cmd.Stdin = nil // never interactive
 	var out bytes.Buffer
-	cmd.Stdout = &cappedWriter{buf: &out, max: opts.MaxOutput}
-	cmd.Stderr = &cappedWriter{buf: &out, max: opts.MaxOutput}
+	writer := &cappedWriter{buf: &out, max: opts.MaxOutput}
+	cmd.Stdout = writer
+	cmd.Stderr = writer
 	err := cmd.Run()
 	res := Result{Path: path, Output: strings.TrimSpace(out.String()), ProbedAt: time.Now()}
 	switch {
@@ -160,11 +161,14 @@ func RequireMarker(r Result, marker string) Result {
 }
 
 type cappedWriter struct {
+	mu  sync.Mutex
 	buf *bytes.Buffer
 	max int64
 }
 
 func (w *cappedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	remaining := w.max - int64(w.buf.Len())
 	if remaining <= 0 {
 		return len(p), nil

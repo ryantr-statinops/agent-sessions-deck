@@ -85,3 +85,23 @@ func TestProbeNonInteractive(t *testing.T) {
 		t.Errorf("stdin reader = %+v", r)
 	}
 }
+
+func TestProbeConcurrentStdoutAndStderr(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "parallel")
+	script := "#!/bin/sh\n" +
+		"(head -c 100000 /dev/zero | tr '\\0' 'x') &\n" +
+		"(head -c 100000 /dev/zero | tr '\\0' 'y') >&2 &\n" +
+		"wait\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := NewProber(ProbeOptions{Timeout: 2 * time.Second, MaxOutput: 64})
+	got := p.Probe(context.Background(), bin)
+	if got.Status != StatusAvailable {
+		t.Fatalf("concurrent output probe = %+v", got)
+	}
+	if len(got.Output) > 64 {
+		t.Fatalf("output exceeded cap: got %d bytes", len(got.Output))
+	}
+}
