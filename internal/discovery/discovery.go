@@ -113,8 +113,15 @@ func Scan(opts Options) []Binary {
 		if dir == "" {
 			return
 		}
-		if strings.HasPrefix(dir, "~") && opts.Home != "" {
-			dir = filepath.Join(opts.Home, strings.TrimPrefix(dir, "~"))
+		if src == SourceExtra && opts.Home != "" {
+			switch {
+			case dir == "~":
+				dir = opts.Home
+			case strings.HasPrefix(dir, "~/"):
+				dir = filepath.Join(opts.Home, dir[2:])
+			case strings.HasPrefix(dir, "~"):
+				return
+			}
 		}
 		dir = filepath.Clean(dir)
 		if seenDir[dir] {
