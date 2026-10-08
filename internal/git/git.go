@@ -192,21 +192,21 @@ func CountPorcelain(data string) int {
 			break
 		}
 		x, y := data[i], data[i+1]
-		count++
 		isRename := x == 'R' || x == 'C' || y == 'R' || y == 'C'
-		// path begins at i+3
 		j := strings.IndexByte(data[i+3:], 0)
 		if j < 0 {
 			break
 		}
-		i = i + 3 + j + 1
+		next := i + 3 + j + 1
 		if isRename {
-			k := strings.IndexByte(data[i:], 0)
+			k := strings.IndexByte(data[next:], 0)
 			if k < 0 {
 				break
 			}
-			i += k + 1
+			next += k + 1
 		}
+		count++
+		i = next
 	}
 	return count
 }
