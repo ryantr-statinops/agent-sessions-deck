@@ -17,6 +17,7 @@ const (
 	MaxRows            = 256
 	MaxScreenCells     = 1 << 16
 	MaxScrollbackLines = 10000
+	replyStopToken     = "\x00"
 )
 
 var ErrSubscriberExists = errors.New("terminal screen already has an interactive subscriber")
@@ -217,6 +218,15 @@ func (s *Screen) Finish() {
 		}
 		sub.mu.Unlock()
 	}
+}
+func (s *Screen) stopReplyReader() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return io.ErrClosedPipe
+	}
+	_, err := s.emu.InputPipe().Write([]byte(replyStopToken))
+	return err
 }
 
 // Subscribe registers one screen reader and returns the snapshot captured at the
