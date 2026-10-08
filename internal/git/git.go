@@ -153,7 +153,7 @@ func branchName(branch string, detached bool) string {
 	return branch
 }
 
-// run executes git with the bounded context and captures a capped stdout.
+// run executes git with the bounded context and captures stdout and stderr.
 func (c *Client) run(ctx context.Context, dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir}, args...)
 	cmd := exec.CommandContext(ctx, c.binary, full...)
