@@ -22,9 +22,8 @@ func (e *CollisionError) Error() string {
 }
 
 // ValidateConfiguredAgents checks every configured override before any of
-// them is used: stable IDs must be grammar-valid and unique across the
-// configured set and the built-in registry, and display names must not
-// shadow a different configured or built-in agent.
+// them is used: IDs are grammar-checked and unique across configured entries
+// and built-ins; display names are unique and cannot reuse a built-in ID.
 func ValidateConfiguredAgents(configured []config.Agent, builtins agent.Registry) error {
 	var problems []string
 	seenID := map[string]config.Agent{}
@@ -50,6 +49,11 @@ func ValidateConfiguredAgents(configured []config.Agent, builtins agent.Registry
 		if builtins != nil {
 			if _, found := builtins.Lookup(agent.ID(c.ID)); found {
 				problems = append(problems, fmt.Sprintf("configured agent id %q collides with a built-in provider", c.ID))
+			}
+			if c.Name != c.ID {
+				if _, found := builtins.Lookup(agent.ID(c.Name)); found {
+					problems = append(problems, fmt.Sprintf("configured agent name %q collides with built-in provider id %q", c.Name, c.Name))
+				}
 			}
 		}
 	}

@@ -40,6 +40,10 @@ func TestValidateConfiguredAgents(t *testing.T) {
 	if err := ValidateConfiguredAgents(builtInCollision, builtins); err == nil || !strings.Contains(err.Error(), "built-in provider") {
 		t.Errorf("built-in ID collision: %v", err)
 	}
+	builtInNameCollision := []config.Agent{{ID: "custom-claude", Name: "claude", Executable: "/bin/custom"}}
+	if err := ValidateConfiguredAgents(builtInNameCollision, builtins); err == nil || !strings.Contains(err.Error(), "built-in provider id") {
+		t.Errorf("built-in ID/name collision: %v", err)
+	}
 	ok := []config.Agent{{ID: "mine", Name: "mine", Executable: "/bin/a"}}
 	if err := ValidateConfiguredAgents(ok, builtins); err != nil {
 		t.Errorf("ok: %v", err)
