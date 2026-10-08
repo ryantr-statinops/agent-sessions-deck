@@ -1,6 +1,6 @@
 # Stage 04 — Discovery, providers và workspaces
 
-Trạng thái: `PLANNED` · Milestone: M1 · Phụ thuộc: 02, 03 · Cỡ việc: M.
+Trạng thái: `DONE` (acceptance passed on isolated worktree; W1 integration into `dev` pending) · Milestone: M1 · Phụ thuộc: 02, 03 · Cỡ việc: M.
 
 ## Mục tiêu
 
