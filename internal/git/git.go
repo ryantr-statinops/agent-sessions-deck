@@ -232,13 +232,20 @@ func (c *Client) DecodeWorktree(ctx context.Context, dir string) (linked bool, b
 	if !filepath.IsAbs(cmd) {
 		cmd = filepath.Join(dir, cmd)
 	}
-	gd, _ = filepath.EvalSymlinks(gd)
-	cmd, _ = filepath.EvalSymlinks(cmd)
+	gd, err = filepath.EvalSymlinks(gd)
+	if err != nil {
+		return false, false, err
+	}
+	cmd, err = filepath.EvalSymlinks(cmd)
+	if err != nil {
+		return false, false, err
+	}
 	linked = gd != cmd
 	bareOut, err := c.run(ctx, dir, "rev-parse", "--is-bare-repository")
-	if err == nil {
-		bare = strings.TrimSpace(bareOut) == "true"
+	if err != nil {
+		return false, false, err
 	}
+	bare = strings.TrimSpace(bareOut) == "true"
 	return linked, bare, nil
 }
 
