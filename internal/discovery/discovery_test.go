@@ -66,6 +66,7 @@ func TestScanPrecedenceDedupe(t *testing.T) {
 		t.Errorf("missing binary must not be found")
 	}
 }
+
 func TestScanUsesProcessPathWhenPathIsEmpty(t *testing.T) {
 	root := t.TempDir()
 	pathDir := filepath.Join(root, "bin with spaces")
