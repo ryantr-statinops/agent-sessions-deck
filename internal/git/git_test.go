@@ -158,3 +158,23 @@ func TestProbeCancel(t *testing.T) {
 		t.Errorf("cancel: err=%v elapsed=%v", err, time.Since(start))
 	}
 }
+
+func TestCountPorcelainRejectsTruncatedRecords(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		want int
+	}{
+		{name: "unterminated path", data: " M file", want: 0},
+		{name: "unterminated rename source", data: "R  renamed\x00original", want: 0},
+		{name: "valid record before truncated tail", data: " M good\x00 M truncated", want: 1},
+		{name: "complete rename", data: "R  renamed\x00original\x00", want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CountPorcelain(tc.data); got != tc.want {
+				t.Fatalf("CountPorcelain(%q) = %d, want %d", tc.data, got, tc.want)
+			}
+		})
+	}
+}
