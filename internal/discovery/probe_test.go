@@ -105,3 +105,15 @@ func TestProbeConcurrentStdoutAndStderr(t *testing.T) {
 		t.Fatalf("output exceeded cap: got %d bytes", len(got.Output))
 	}
 }
+
+func TestProbeEmptySuccessfulOutputIsUncertain(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := NewProber(ProbeOptions{Timeout: time.Second})
+	got := p.Probe(context.Background(), bin)
+	if got.Status != StatusUncertain || got.Reason == "" {
+		t.Fatalf("empty successful probe = %+v, want uncertain with a reason", got)
+	}
+}
