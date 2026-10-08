@@ -544,6 +544,9 @@ type fakeTerminal struct {
 	sessionID    session.ID
 	generation   session.Generation
 	holder       string
+	snapshot     TerminalSnapshot
+	frames       []TerminalFrame
+	frameIndex   int
 	closed       int
 	resizes      [][2]int
 	subscribeErr error
@@ -553,8 +556,23 @@ type fakeTerminal struct {
 func (t *fakeTerminal) SessionID() session.ID          { return t.sessionID }
 func (t *fakeTerminal) Generation() session.Generation { return t.generation }
 func (t *fakeTerminal) Holder() string                 { return t.holder }
-func (t *fakeTerminal) Read([]byte) (int, error)       { return 0, io.EOF }
-func (t *fakeTerminal) Write(p []byte) (int, error)    { return len(p), nil }
+func (t *fakeTerminal) InitialSnapshot() TerminalSnapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.snapshot
+}
+func (t *fakeTerminal) ReadFrame() (TerminalFrame, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.frameIndex == len(t.frames) {
+		return TerminalFrame{}, io.EOF
+	}
+	frame := t.frames[t.frameIndex]
+	t.frameIndex++
+	return frame, nil
+}
+func (t *fakeTerminal) Read([]byte) (int, error)    { return 0, io.EOF }
+func (t *fakeTerminal) Write(p []byte) (int, error) { return len(p), nil }
 func (t *fakeTerminal) Resize(w, h int) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
