@@ -123,6 +123,8 @@ func (p *Prober) Probe(ctx context.Context, path string) Result {
 		} else {
 			res.Status, res.Reason = StatusUncertain, err.Error()
 		}
+	case res.Output == "":
+		res.Status, res.Reason = StatusUncertain, "probe returned no output"
 	default:
 		res.Status = StatusAvailable
 	}
