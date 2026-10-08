@@ -150,6 +150,9 @@ func Scan(opts Options) []Binary {
 		}
 	}
 
+	if len(opts.Path) == 0 {
+		opts.Path = SplitPathList(os.Getenv("PATH"))
+	}
 	for _, d := range opts.Path {
 		add(d, SourcePath)
 	}

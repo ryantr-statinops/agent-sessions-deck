@@ -66,3 +66,24 @@ func TestScanPrecedenceDedupe(t *testing.T) {
 		t.Errorf("missing binary must not be found")
 	}
 }
+func TestScanUsesProcessPathWhenPathIsEmpty(t *testing.T) {
+	root := t.TempDir()
+	pathDir := filepath.Join(root, "bin with spaces")
+	extraDir := filepath.Join(root, "extra")
+	for _, dir := range []string{pathDir, extraDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeExe(t, filepath.Join(pathDir, "agent"), 0o755)
+	writeExe(t, filepath.Join(extraDir, "agent"), 0o755)
+	t.Setenv("PATH", pathDir)
+
+	got, ok, err := Find("agent", Options{ExtraPaths: []string{extraDir}})
+	if err != nil || !ok {
+		t.Fatalf("Find agent = %+v, %v, %v", got, ok, err)
+	}
+	if got.Dir != pathDir || got.Source != SourcePath {
+		t.Fatalf("Find agent = %+v, want process PATH before extra_paths", got)
+	}
+}
