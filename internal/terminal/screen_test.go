@@ -186,6 +186,52 @@ func TestScreenAllowsOnlyOneSubscriberAndCloseUnblocksReader(t *testing.T) {
 	}
 }
 
+func TestScreenFinishDrainsQueuedFramesAndRetainsFinalSnapshot(t *testing.T) {
+	screen := newTestScreen(t, 8, 2, 2)
+	sub, err := screen.Subscribe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Close()
+	if _, err := screen.Feed([]byte("final")); err != nil {
+		t.Fatal(err)
+	}
+	screen.Finish()
+	screen.Finish()
+	frame, err := sub.ReadFrame()
+	if err != nil || frame.Sequence != 1 || frame.Delta == nil {
+		t.Fatalf("queued final frame = %+v, %v", frame, err)
+	}
+	if _, err := sub.ReadFrame(); !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadFrame after final frame = %v, want EOF", err)
+	}
+	if err := screen.Resize(10, 2); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("Resize after finish error = %v, want closed-pipe", err)
+	}
+	if got := lineText(screen.Snapshot().Screen.Lines[0]); !strings.HasPrefix(got, "final") {
+		t.Fatalf("final screen = %q, want final output retained", got)
+	}
+}
+
+func TestScreenSubscriptionAfterFinishReceivesFinalSnapshot(t *testing.T) {
+	screen := newTestScreen(t, 8, 2, 2)
+	if _, err := screen.Feed([]byte("done")); err != nil {
+		t.Fatal(err)
+	}
+	screen.Finish()
+	sub, err := screen.Subscribe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Close()
+	if got := sub.InitialSnapshot(); got.Sequence != 1 || !strings.HasPrefix(lineText(got.Screen.Lines[0]), "done") {
+		t.Fatalf("final snapshot = %+v, want sequence 1 with done", got)
+	}
+	if _, err := sub.ReadFrame(); !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadFrame after final snapshot = %v, want EOF", err)
+	}
+}
+
 func TestNewScreenRejectsUnboundedDimensionsAndScrollback(t *testing.T) {
 	for _, tc := range []struct {
 		columns, rows, scrollback int
