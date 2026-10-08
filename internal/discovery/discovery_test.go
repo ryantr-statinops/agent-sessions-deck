@@ -87,3 +87,27 @@ func TestScanUsesProcessPathWhenPathIsEmpty(t *testing.T) {
 		t.Fatalf("Find agent = %+v, want process PATH before extra_paths", got)
 	}
 }
+
+func TestScanExpandsOnlySupportedExtraPathTildes(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	for _, dir := range []string{filepath.Join(home, "bin"), filepath.Join(home, "other", "bin"), filepath.Join(home, "path")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeExe(t, filepath.Join(home, "bin", "extra-agent"), 0o755)
+	writeExe(t, filepath.Join(home, "other", "bin", "user-agent"), 0o755)
+	writeExe(t, filepath.Join(home, "path", "path-agent"), 0o755)
+	noPath := filepath.Join(root, "missing-path")
+
+	if got, ok, err := Find("extra-agent", Options{Path: []string{noPath}, ExtraPaths: []string{"~/bin"}, Home: home}); err != nil || !ok || got.Source != SourceExtra {
+		t.Fatalf("supported extra tilde = %+v, %v, %v", got, ok, err)
+	}
+	if _, ok, err := Find("user-agent", Options{Path: []string{noPath}, ExtraPaths: []string{"~other/bin"}, Home: home}); err != nil || ok {
+		t.Fatalf("unsupported user tilde resolved: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := Find("path-agent", Options{Path: []string{"~/path"}, Home: home}); err != nil || ok {
+		t.Fatalf("process PATH entry was home-expanded: ok=%v err=%v", ok, err)
+	}
+}
