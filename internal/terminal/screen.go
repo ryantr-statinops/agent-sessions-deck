@@ -27,14 +27,14 @@ var ErrSubscriberExists = errors.New("terminal screen already has an interactive
 type Screen struct {
 	mu sync.Mutex
 
-	emu        *vt.Emulator
-	columns    int
-	rows       int
-	sequence   uint64
-	lines      []app.TerminalLine
-	subscriber *ScreenSubscription
-	closed     bool
-
+	emu           *vt.Emulator
+	columns       int
+	rows          int
+	sequence      uint64
+	lines         []app.TerminalLine
+	subscriber    *ScreenSubscription
+	closed        bool
+	finished      bool
 	cursorVisible atomic.Bool
 	cursorShape   atomic.Uint32
 	cursorBlink   atomic.Bool
@@ -53,6 +53,7 @@ type ScreenSubscription struct {
 	hasFrame      bool
 	needsSnapshot bool
 	closed        bool
+	finished      bool
 }
 
 // NewScreen constructs a VT emulator with a bounded screen and scrollback.
@@ -98,7 +99,7 @@ func (s *Screen) Feed(data []byte) (int, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
+	if s.closed || s.finished {
 		return 0, io.ErrClosedPipe
 	}
 	n, err := s.emu.Write(data)
@@ -169,7 +170,7 @@ func (s *Screen) Resize(columns, rows int) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
+	if s.closed || s.finished {
 		return io.ErrClosedPipe
 	}
 	if s.columns == columns && s.rows == rows {
@@ -199,6 +200,25 @@ func (s *Screen) Snapshot() app.TerminalSnapshot {
 	return s.snapshotLocked()
 }
 
+// Finish marks PTY output complete while preserving the final screen for snapshots.
+// Pending frames are delivered before readers receive EOF.
+func (s *Screen) Finish() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.finished {
+		return
+	}
+	s.finished = true
+	if sub := s.subscriber; sub != nil {
+		sub.mu.Lock()
+		if !sub.closed {
+			sub.finished = true
+			sub.cond.Broadcast()
+		}
+		sub.mu.Unlock()
+	}
+}
+
 // Subscribe registers one screen reader and returns the snapshot captured at the
 // same sequence boundary. A second writer is refused; V1 leases are exclusive.
 func (s *Screen) Subscribe() (*ScreenSubscription, error) {
@@ -211,7 +231,7 @@ func (s *Screen) Subscribe() (*ScreenSubscription, error) {
 		return nil, ErrSubscriberExists
 	}
 	initial := s.snapshotLocked()
-	sub := &ScreenSubscription{screen: s, initial: initial, lastSequence: s.sequence}
+	sub := &ScreenSubscription{screen: s, initial: initial, lastSequence: s.sequence, finished: s.finished}
 	sub.cond = sync.NewCond(&sub.mu)
 	s.subscriber = sub
 	return sub, nil
@@ -225,6 +245,7 @@ func (s *Screen) Close() error {
 	if s.closed {
 		return nil
 	}
+	s.finished = true
 	s.closed = true
 	if sub := s.subscriber; sub != nil {
 		sub.mu.Lock()
@@ -273,6 +294,10 @@ func (sub *ScreenSubscription) ReadFrame() (app.TerminalFrame, error) {
 			sub.lastSequence = frame.Sequence
 			sub.mu.Unlock()
 			return frame, nil
+		}
+		if sub.finished {
+			sub.mu.Unlock()
+			return app.TerminalFrame{}, io.EOF
 		}
 		sub.cond.Wait()
 		sub.mu.Unlock()
