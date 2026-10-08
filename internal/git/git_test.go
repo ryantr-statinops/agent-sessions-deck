@@ -178,3 +178,28 @@ func TestCountPorcelainRejectsTruncatedRecords(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeWorktreeReportsUnresolvableGitDirectories(t *testing.T) {
+	fakeGit := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\ncase \"$4\" in\n--git-dir|--git-common-dir) printf 'missing-dir\\n' ;;\n--is-bare-repository) printf 'false\\n' ;;\nesac\n"
+	if err := os.WriteFile(fakeGit, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client := NewClient(WithBinary(fakeGit))
+	linked, bare, err := client.DecodeWorktree(context.Background(), t.TempDir())
+	if err == nil || linked || bare {
+		t.Fatalf("unresolvable git directories = linked %v, bare %v, err %v", linked, bare, err)
+	}
+}
+
+func TestDecodeWorktreeReportsBareProbeFailure(t *testing.T) {
+	fakeGit := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\ncase \"$4\" in\n--git-dir|--git-common-dir) printf '%s\\n' \"$2\" ;;\n--is-bare-repository) exit 3 ;;\nesac\n"
+	if err := os.WriteFile(fakeGit, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client := NewClient(WithBinary(fakeGit))
+	if _, _, err := client.DecodeWorktree(context.Background(), t.TempDir()); err == nil {
+		t.Fatal("bare-repository probe failure was ignored")
+	}
+}
