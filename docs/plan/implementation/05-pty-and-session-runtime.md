@@ -1,6 +1,6 @@
 # Stage 05 — PTY và session runtime
 
-Trạng thái: `PLANNED` · Milestone: M1 · Phụ thuộc: 02, 03 và spike/ADR 00 · Cỡ việc: L.
+Trạng thái: `DONE` (coordinator acceptance; Linux checks and runtime behavior tests passed) · Milestone: M1 · Phụ thuộc: 02, 03 và spike/ADR 00 · Cỡ việc: L.
 
 ## Mục tiêu
 
@@ -8,25 +8,25 @@ Một runtime độc lập UI sở hữu child process, PTY, lifecycle và termi
 
 ## Phạm vi và đầu ra
 
-`internal/process/`, `internal/pty/`, `internal/terminal/`, runtime implementation trong `internal/session/`, `tests/integration/runtime/`; tài liệu process ownership và terminal stream protocol.
+`internal/process/`, `internal/pty/`, `internal/terminal/`, runtime implementation trong `internal/session/`, `tests/integration/runtime/`; [terminal stream/process ownership contract](../../architecture/terminal-stream.md) và [acceptance report](reports/stage-05.md).
 
 ## Checklist thực thi
 
-- [ ] Start command bằng absolute resolved executable + argv, cwd đã validate; env kế thừa runtime, không persist. Tránh dùng request context của CLI làm lifetime process: cancel client không tự kill session.
-- [ ] Dùng PTY controlling TTY và new OS session theo API đã spike; lưu PID/PGID thực tế. Không kết hợp tùy tiện Setsid/Setpgid gây launch failure.
-- [ ] Launch transaction: record Starting, spawn, capture identity/PTY, persist Running. Nếu save sau spawn fail, cleanup child bằng ownership đã xác minh và báo launch failure; không để child invisible.
-- [ ] Mỗi PTY có đúng một read loop; phân phối bytes sang emulator/state engine. Background session vẫn drain output dù không có subscriber.
-- [ ] Parser handling UTF-8 chunk boundary, alt-screen/cursor/modes; response cho terminal queries do runtime thực hiện, không phụ thuộc client đang attach.
-- [ ] Screen snapshot + sequence number, incremental updates/dirty cells theo contract; attach snapshot và subscribe phải không bỏ mất bytes giữa hai bước.
-- [ ] Bounded screen/scrollback/render queues; parser không được drop bytes tùy tiện vì sẽ làm sai terminal state. Coalesce UI frames và cap scrollback, policy overflow ghi rõ.
-- [ ] Input adapter serializes writes, giữ literal paste; resize validation + debounce + PTY window-size update; process nhận SIGWINCH theo OS semantics đã test.
-- [ ] Một interactive lease mỗi session; second writer bị từ chối có lý do. Khi lease mất kết nối, detach và release nhưng process tiếp tục nếu owner còn sống.
-- [ ] `Wait` chỉ gọi một lần; exit callback kiểm tra attempt generation, ghi exit code/signal/reason, drain trailing output và close descriptor/goroutines đúng thứ tự.
-- [ ] Stop gửi graceful signal tới owned process group, chờ timeout. Nếu chưa exit, trả còn running/stop-timeout và gợi ý kill; không tự SIGKILL trừ hành động force đã explicit.
-- [ ] Kill explicit dùng owned group sau identity checks; restart-running yêu cầu force confirmation contract. Restart serialize stop → verify exit → attempt mới, không chạy hai attempt chồng nhau.
-- [ ] Identity checks dùng owner/attempt + starttime/boot ID; cân nhắc pidfd cho stable process handle. Stale/unverifiable identity từ chối signal, không dùng PID đơn lẻ hoặc kill-by-name.
-- [ ] Test agent sinh descendants cùng group và tách session/group; ghi giới hạn Linux process-group cleanup. PID leader exit không chứng minh group sạch; không signal PGID tái sử dụng khi không xác minh được.
-- [ ] Xác định session completion khi leader exit nhưng descendants còn giữ PTY: grace/drain deadline, residual-owned-process evidence và trạng thái rõ; không giữ reader vô hạn.
+- [x] Start command bằng absolute resolved executable + argv, cwd đã validate; env kế thừa runtime, không persist. Launch context không gắn với child lifetime.
+- [x] Dùng controlling TTY và new OS session; capture PID/PGID thực tế, kiểm tra PID là process-group leader.
+- [x] App launch transaction ghi Starting, spawn, capture identity, rồi persist Running; persistence failure cleanup dùng identity đã xác minh và force-kill có reap confirmation.
+- [x] Mỗi PTY có một background read loop; terminal state tiếp tục drain khi detached.
+- [x] Emulator xử lý UTF-8/chunking, alt-screen/cursor/modes và trả lời terminal queries khi không có subscriber.
+- [x] Attach trả screen snapshot cùng sequence boundary; frame tiếp theo là delta có thứ tự hoặc snapshot resync.
+- [x] Screen, scrollback, input/raw-output buffers và frame queue được giới hạn; parser không drop byte đầu vào.
+- [x] Input writes được tuần tự hóa, paste giữ literal; resize validate/debounce và cập nhật PTY, SIGWINCH có handshake test.
+- [x] Mỗi session có một interactive lease; detach/release không signal process; reattach cùng attempt giữ screen/input.
+- [x] Runtime có một reaper/Wait mỗi child; terminal drain có deadline, exit evidence generation-fenced ở app/domain layer.
+- [x] Stop chỉ gửi SIGTERM, chờ grace và trả timeout khi còn sống; không tự nâng lên SIGKILL.
+- [x] ForceKill là hành động explicit; app restart yêu cầu force khi còn chạy, runtime từ chối overlap và chỉ mở generation mới sau khi attempt cũ/reaper hoàn tất.
+- [x] Signal cần runtime-owned PID/PGID/boot/starttime/owner identity match; stale/mismatched identity bị từ chối.
+- [x] Tests phân biệt descendants cùng group với setsid-detached; runtime ghi residual PGID members sau leader reap và không signal group sau khi leader gone.
+- [x] Leader exit có terminal drain deadline 500 ms và group-member observation grace 500 ms; residual PIDs/scan uncertainty được ghi trong exit evidence, không giữ reader vô hạn.
 
 ## Ngoài phạm vi
 
@@ -34,12 +34,12 @@ Không tự nhận process từ ngoài ASD, không pid scanner để adopt, khô
 
 ## Acceptance và verification
 
-- Fake agent có controlling TTY, cwd/env đúng, raw/line input, Ctrl+C và resize có observable handshake.
-- Detach không kill; reattach cùng attempt nhận screen đúng và input tiếp tục.
-- Stop cooperative child group kết thúc; ignored TERM cần explicit kill; restart chỉ tạo một attempt mới sau attempt cũ đã xử lý.
-- Launch/save failure, EOF/EIO, broken input và output flood có typed error, không crash runtime hoặc leak FD/goroutine.
-- Tests identity mismatch/boot mismatch/old callback không signal hoặc overwrite attempt hiện tại; external sentinel process vẫn sống.
-- Race suite pass cho concurrent exit/stop/restart/input/resize, với timeout và fixture cleanup.
+- [x] Fake process chạy controlling TTY, cwd/env, raw/line input, Ctrl+C và resize/SIGWINCH handshake.
+- [x] Detach không kill; reattach cùng generation nhận screen và tiếp tục input.
+- [x] Cooperative stop, ignored TERM + explicit force kill, restart serialization/no-overlap đều có behavior tests.
+- [x] Launch/persistence failure handling, EOF/EIO, broken input và output flood được kiểm tra tại process/app/terminal suites; buffers/drains có giới hạn.
+- [x] Identity mismatch/boot mismatch/stale callback không được phép signal/ghi đè generation; external sentinel sống sau owned-group kill.
+- [x] `make test-race` pass trên toàn bộ module Linux, gồm process/runtime, terminal, app và integration tests.
 
 ## Skills tham khảo
 
