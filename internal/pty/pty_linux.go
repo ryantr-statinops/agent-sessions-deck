@@ -118,6 +118,16 @@ func (c *Child) Wait() error {
 	return c.cmd.Wait()
 }
 
+// Kill terminates the exact child handle returned by Start. It is reserved for
+// rollback before a process identity has been captured; session lifecycle signals
+// must instead verify and target the recorded process group.
+func (c *Child) Kill() error {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return errors.New("pty child is unavailable")
+	}
+	return c.cmd.Process.Kill()
+}
+
 // ProcessState returns the wait status after Wait completes.
 func (c *Child) ProcessState() *os.ProcessState {
 	if c == nil || c.cmd == nil {
