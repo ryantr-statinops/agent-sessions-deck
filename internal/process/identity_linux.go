@@ -22,6 +22,7 @@ var errMalformedProcStat = errors.New("malformed proc stat")
 
 type procStat struct {
 	PID        int
+	State      byte
 	PGID       int
 	StartTicks uint64
 }
@@ -149,14 +150,14 @@ func parseProcStat(data []byte) (procStat, error) {
 		return procStat{}, errors.New("truncated fields")
 	}
 	pgid, err := strconv.Atoi(fields[2])
-	if err != nil || pgid <= 0 {
+	if err != nil || pgid < 0 {
 		return procStat{}, errors.New("invalid process group id")
 	}
 	startTicks, err := strconv.ParseUint(fields[startTicksIndex], 10, 64)
 	if err != nil || startTicks == 0 {
 		return procStat{}, errors.New("invalid start ticks")
 	}
-	return procStat{PID: pid, PGID: pgid, StartTicks: startTicks}, nil
+	return procStat{PID: pid, State: fields[0][0], PGID: pgid, StartTicks: startTicks}, nil
 }
 
 func probeDetail(err error) string {
