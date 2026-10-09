@@ -20,6 +20,7 @@ import (
 const (
 	defaultColumns = 80
 	defaultRows    = 24
+	drainGrace     = 500 * time.Millisecond
 )
 
 // Runtime owns children launched by this process and refuses to signal a PID or
@@ -35,6 +36,7 @@ type ownedChild struct {
 	id         domain.ID
 	generation domain.Generation
 	identity   domain.ProcessIdentity
+	terminal   *terminal.Session
 	child      *pty.Child
 	done       chan struct{}
 	status     domain.ExitStatus
@@ -66,6 +68,27 @@ func (r *Runtime) Launch(ctx context.Context, req domain.LaunchRequest) (domain.
 	if err := req.Validate(); err != nil {
 		return domain.ProcessIdentity{}, err
 	}
+	r.mu.Lock()
+	var previous *ownedChild
+	for _, candidate := range r.children {
+		if candidate.id == req.SessionID && (previous == nil || candidate.generation > previous.generation) {
+			previous = candidate
+		}
+	}
+	r.mu.Unlock()
+	if previous != nil {
+		if req.Generation <= previous.generation {
+			return domain.ProcessIdentity{}, fmt.Errorf("launch generation %d does not follow completed generation %d", req.Generation, previous.generation)
+		}
+		select {
+		case <-previous.done:
+		default:
+			return domain.ProcessIdentity{}, errors.New("cannot start a new attempt while the previous owned child is running")
+		}
+		if err := r.terminals.Remove(req.SessionID, previous.generation); err != nil {
+			return domain.ProcessIdentity{}, fmt.Errorf("remove completed terminal attempt %d: %w", previous.generation, err)
+		}
+	}
 	argv := req.Command.Args()
 	child, err := pty.Start(req.Command.Executable(), argv, req.Workspace.Path(), pty.Size{Columns: defaultColumns, Rows: defaultRows})
 	if err != nil {
@@ -83,16 +106,21 @@ func (r *Runtime) Launch(ctx context.Context, req domain.LaunchRequest) (domain.
 		cleanupErr := cleanupUnverifiedChild(child)
 		return domain.ProcessIdentity{}, errors.Join(err, cleanupErr)
 	}
-	if _, err := r.terminals.Register(req.SessionID, req.Generation, child, pty.Size{Columns: defaultColumns, Rows: defaultRows}); err != nil {
+	terminalSession, err := r.terminals.Register(req.SessionID, req.Generation, child, pty.Size{Columns: defaultColumns, Rows: defaultRows})
+	if err != nil {
 		cleanupErr := cleanupUnverifiedChild(child)
 		return domain.ProcessIdentity{}, errors.Join(fmt.Errorf("register PTY terminal: %w", err), cleanupErr)
 	}
-	entry := &ownedChild{id: req.SessionID, generation: req.Generation, identity: identity, child: child, done: make(chan struct{})}
+	entry := &ownedChild{id: req.SessionID, generation: req.Generation, identity: identity, terminal: terminalSession, child: child, done: make(chan struct{})}
 	r.mu.Lock()
-	if _, exists := r.children[identity.PID]; exists {
-		r.mu.Unlock()
-		_ = child.Close()
-		return domain.ProcessIdentity{}, fmt.Errorf("process runtime already owns pid %d", identity.PID)
+	if existing := r.children[identity.PID]; existing != nil {
+		select {
+		case <-existing.done:
+		default:
+			r.mu.Unlock()
+			cleanupErr := cleanupUnverifiedChild(child)
+			return domain.ProcessIdentity{}, errors.Join(fmt.Errorf("process runtime already owns live pid %d", identity.PID), cleanupErr)
+		}
 	}
 	r.children[identity.PID] = entry
 	r.mu.Unlock()
@@ -122,11 +150,37 @@ func (r *Runtime) reap(entry *ownedChild) {
 		waitErr = nil // A nonzero exit code is terminal evidence, not a wait failure.
 	}
 	_ = entry.child.Close()
+	drainCtx, cancel := context.WithTimeout(context.Background(), drainGrace)
+	drainErr := entry.terminal.WaitOutput(drainCtx)
+	cancel()
+	if drainErr != nil {
+		status.Evidence += fmt.Sprintf("; terminal drain deadline expired: %v", drainErr)
+	}
+	if residual := residualGroupEvidence(entry.identity.PGID, drainGrace); residual != "" {
+		status.Evidence += "; " + residual
+	}
 	r.mu.Lock()
 	entry.status = status
 	entry.waitErr = waitErr
 	close(entry.done)
 	r.mu.Unlock()
+}
+
+func residualGroupEvidence(pgid int, grace time.Duration) string {
+	deadline := time.Now().Add(grace)
+	for {
+		members, err := GroupMembers(pgid)
+		if err != nil {
+			return fmt.Sprintf("process-group scan incomplete after leader reap: %v", err)
+		}
+		if len(members) == 0 {
+			return ""
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Sprintf("process-group members remain after leader reap: %v", members)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func exitStatus(child *pty.Child, waitErr error) domain.ExitStatus {

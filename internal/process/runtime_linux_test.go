@@ -243,3 +243,75 @@ func TestRuntimeOwnsTerminalDrainAcrossDetachAndReattach(t *testing.T) {
 		t.Fatalf("cleanup owned child: %v", err)
 	}
 }
+
+func TestRuntimeRestartUsesFreshTerminalGeneration(t *testing.T) {
+	runtime, err := NewRuntime("owner-restart", terminal.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for generation, marker := range []string{"FIRST_ATTEMPT", "SECOND_ATTEMPT"} {
+		generation++
+		command, err := agent.NewCommand("/bin/sh", []string{"-c", "printf '%s\n' \"$0\"; sleep 0.05", marker})
+		if err != nil {
+			t.Fatal(err)
+		}
+		identity, err := runtime.Launch(context.Background(), domain.LaunchRequest{
+			SessionID: "restart-session", Generation: domain.Generation(generation), Command: command, Workspace: ws,
+		})
+		if err != nil {
+			t.Fatalf("launch generation %d: %v", generation, err)
+		}
+		status, err := runtime.WaitExit(context.Background(), domain.ExitWait{
+			SessionID: "restart-session", Generation: domain.Generation(generation), Identity: identity, Waiter: "owner-restart",
+		})
+		if err != nil || !status.Valid() {
+			t.Fatalf("wait generation %d: status=%+v err=%v", generation, status, err)
+		}
+	}
+	lease := app.InteractiveLease{SessionID: "restart-session", Generation: 2, Holder: "restart-client", AcquiredAt: time.Now().UTC()}
+	subscription, err := runtime.Terminals().Subscribe(context.Background(), lease)
+	if err != nil {
+		t.Fatalf("attach to restarted attempt: %v", err)
+	}
+	defer subscription.Close()
+	var screen strings.Builder
+	for _, line := range subscription.InitialSnapshot().Screen.Lines {
+		for _, cell := range line.Cells {
+			screen.WriteString(cell.Text)
+		}
+	}
+	if !strings.Contains(screen.String(), "SECOND_ATTEMPT") || strings.Contains(screen.String(), "FIRST_ATTEMPT") {
+		t.Fatalf("restart screen contains stale or missing attempt output: %q", screen.String())
+	}
+}
+
+func TestRuntimeRefusesAttemptOverlap(t *testing.T) {
+	runtime, err := NewRuntime("owner-overlap", terminal.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := agent.NewCommand("/bin/sh", []string{"-c", "exec sleep 30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := runtime.Launch(context.Background(), domain.LaunchRequest{SessionID: "overlap", Generation: 1, Command: command, Workspace: ws})
+	if err != nil {
+		t.Fatalf("launch first attempt: %v", err)
+	}
+	t.Cleanup(func() { _, _ = runtime.ForceKill(context.Background(), first, time.Second) })
+	if _, err := runtime.Launch(context.Background(), domain.LaunchRequest{SessionID: "overlap", Generation: 2, Command: command, Workspace: ws}); err == nil {
+		t.Fatal("launch overlapping generation while first child runs")
+	}
+	kill, err := runtime.ForceKill(context.Background(), first, 2*time.Second)
+	if err != nil || kill.Timeout || kill.Terminated.Signal != "SIGKILL" {
+		t.Fatalf("cleanup first attempt: outcome=%+v err=%v", kill, err)
+	}
+}
