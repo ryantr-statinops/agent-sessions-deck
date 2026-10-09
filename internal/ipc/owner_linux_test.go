@@ -67,8 +67,9 @@ func TestBootstrapReleasesLockWhenSocketBindFails(t *testing.T) {
 		_ = owner.Close()
 		t.Fatal("bootstrap replaced a pre-existing non-socket path")
 	}
-	if err := os.WriteFile(socket, []byte("still here"), 0o600); err != nil {
-		t.Fatalf("socket-bind failure removed or replaced existing path: %v", err)
+	got, err := os.ReadFile(socket)
+	if err != nil || string(got) != "do not unlink" {
+		t.Fatalf("socket-bind failure modified existing path: data=%q err=%v", got, err)
 	}
 	owner, err := Bootstrap(paths, filepath.Join(root, "runtime", "control.sock"))
 	if err != nil {

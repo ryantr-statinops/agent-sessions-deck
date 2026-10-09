@@ -57,10 +57,10 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 		return nil, fmt.Errorf("mint owner instance ID: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
-		return nil, fmt.Errorf("create socket directory: %w", err)
+		return nil, fmt.Errorf("create owner socket directory: %w", err)
 	}
 	if err := os.Chmod(filepath.Dir(socketPath), 0o700); err != nil {
-		return nil, fmt.Errorf("secure socket directory: %w", err)
+		return nil, fmt.Errorf("secure owner socket directory: %w", err)
 	}
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
 	if err != nil {
