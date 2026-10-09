@@ -2,7 +2,7 @@
 
 ## Mục đích và trạng thái
 
-Tài liệu này gộp các stage tương lai thành execution wave có dependency rõ và cách giao việc cho Orca. Các stage 00–02 đã hoàn tất vẫn giữ nguyên ID, report và evidence; không gộp lại hoặc đổi lịch sử. Stage 03–15 vẫn là các checklist/acceptance con. Một wave chỉ `DONE` khi mọi gate của wave và các stage con tương ứng có evidence; việc merge code hoặc worker báo xong chưa đủ.
+Tài liệu này gộp các stage tương lai thành execution wave có dependency rõ và cách giao việc cho Orca. Stage 00–02 đã hoàn tất; Stage 03–05 có report/status riêng và chỉ được giữ `DONE` khi gate/evidence tương ứng pass. Wave chỉ `DONE` khi mọi gate của wave và các stage con tương ứng có evidence; việc merge code hoặc worker báo xong chưa đủ.
 
 **Ưu tiên:** hoàn thành M1–M2 để giao V1 qua Stage 10; chỉ mở M3/V2 và M4/V3 sau khi xem lại nhu cầu thực tế, như implementation README đã yêu cầu.
 
@@ -45,7 +45,7 @@ Coordinator giữ PRODUCT, shared DTO/API, dependency changes, task DAG, stage s
 
 ### Dependency and worker assignment
 
-Dependency remains `03 → (04 ∥ 05) → 06`. User chọn Kilo default cho W1. Stage 04 và 05 độc lập trong DAG, nhưng chỉ chạy cùng lúc sau khi shared contracts freeze, có hai slot đã xác minh và worktree/file allowlist riêng; hiện Stage 05 bị chặn bởi attempt Kilo chưa settle. Stage 06 chỉ bắt đầu sau khi Stage 04/05 acceptance pass.
+Dependency remains `03 → (04 ∥ 05) → 06`. Stage 04 và Stage 05 acceptance đã pass riêng; Stage 04 đã tích hợp vào `dev`, Stage 05 đang chờ tích hợp. Stage 06 chỉ bắt đầu sau khi cả hai stage đã tích hợp vào `dev`; W1 vẫn cần Stage 06 E2E gate.
 
 - Worker target: `kilo`; bỏ `--model` để dùng default đã được user chọn. Mỗi dispatch phải ghi effective model và kết quả `ready`/completion; không coi model hiển thị ở terminal cũ là bằng chứng capacity hiện tại.
 - Coordinator owns PRODUCT/ADR decisions, shared interfaces, `go.mod`/`go.sum`, acceptance, docs/status and integration. Parallel task branches use isolated worktrees with explicit allowlists; merge to `dev` only after their tasks settle, then verify `dev` before it is ready for a PR to `main`.
@@ -137,6 +137,6 @@ This ledger decomposes the stage checklists into independently testable behavior
 
 Each code row is one small task and one commit with its behavior tests. Parallel tasks use isolated worktrees/branches, explicit disjoint file allowlists and frozen shared contracts; keep commits on those branches and merge into `dev` only after sibling tasks settle. Run `make check` and race acceptance on `dev` after integration; do not merge to `main` until `dev` passes. Each docs row changes exactly one file. Coordinator owns shared APIs, dependencies, acceptance, merge order and final integration. Never advance past failed tests or an unresolved worker.
 
-W1.0 contract freeze is complete in ADR 0003. Stage 03 is DONE. Stage 04 acceptance is DONE on `work/w1-stage04-acceptance`; the `dev` branch still needs this branch integrated. Stage 05 has no implementation commits; its previous Kilo dispatch is terminal-missing with unverifiable liveness, so do not retry until positive exit evidence. Stage 06 starts only after both 04 and 05 gates pass. The W1 close gate requires all stage reports/status updates integrated into `dev` and full E2E verification there.
+W1.0 contract freeze is complete in ADR 0003. Stage 03 is DONE. Stage 04 acceptance and integration into `dev` are complete. Stage 05 acceptance is DONE on `work/w1-stage05-runtime`; its tested commits and report/status still need integration into `dev`. Stage 06 starts after both 04 and 05 are present in `dev`. The W1 close gate requires Stage 03–06 reports/status and full E2E verification on `dev`.
 
 The coordinator closes W1 only after Stage 03–06 gates and the full end-to-end make check pass. A worker completion message alone is not a gate.
