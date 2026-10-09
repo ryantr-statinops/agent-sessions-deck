@@ -34,6 +34,12 @@ type Runtime struct {
 // InstanceID returns the unique identity claimed before socket binding.
 func (r *Runtime) InstanceID() string { return r.claim.InstanceID() }
 
+// Client exposes the in-process application client to the command that bootstrapped this owner.
+func (r *Runtime) Client() app.Client { return r.app }
+
+// Close releases an owner that failed before its server entered Serve.
+func (r *Runtime) Close() error { return r.claim.Close() }
+
 // Start claims the owner lock before opening its store or serving the socket.
 func Start(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime, error) {
 	claim, err := ipc.BootstrapPaths(paths)

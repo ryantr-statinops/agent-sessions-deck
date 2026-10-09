@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,7 +54,7 @@ func NewRoot(opts Options) *cobra.Command {
 		fmt.Fprintf(opts.Stderr, "foreground owner %s is running; use Ctrl-C to stop\n", runtimeID(runtime))
 		return runtime.Serve(ctx)
 	}
-	root.AddCommand(scanCommand(opts), listCommand(opts), inspectCommand(opts), newCommand(opts), openCommand(opts), detachCommand(opts), renameCommand(opts), restartCommand(opts), stopCommand(opts), killCommand(opts), deleteCommand(opts))
+	root.AddCommand(scanCommand(opts), listCommand(opts), inspectCommand(opts), newCommand(opts), openCommand(opts), renameCommand(opts), restartCommand(opts), stopCommand(opts), killCommand(opts))
 	return root
 }
 
@@ -82,15 +85,15 @@ func scanCommand(opts Options) *cobra.Command {
 
 func listCommand(opts Options) *cobra.Command {
 	var jsonOutput bool
-	var lifecycle, agentID, workspaceID string
+	var status, agentID, workspaceID string
 	cmd := &cobra.Command{Use: "list", Short: "List sessions", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := readClient(cmd.Context(), opts)
 		if err != nil {
 			return err
 		}
 		req := app.ListRequest{AgentID: agent.ID(agentID), Workspace: workspace.ID(workspaceID)}
-		if lifecycle != "" {
-			req.Lifecycles = []session.Lifecycle{session.Lifecycle(lifecycle)}
+		if status != "" {
+			req.Lifecycles = []session.Lifecycle{session.Lifecycle(status)}
 		}
 		result, err := client.List(cmd.Context(), req)
 		if err != nil {
@@ -99,13 +102,19 @@ func listCommand(opts Options) *cobra.Command {
 		if jsonOutput {
 			return writeJSON(opts.Stdout, result)
 		}
+		fmt.Fprintf(opts.Stdout, "authority=%s observed_at=%s revision=%d\n", result.Snapshot.Authority, result.Snapshot.ObservedAt.Format(time.RFC3339), result.Snapshot.Revision)
+		if len(result.Snapshot.Sessions) == 0 {
+			fmt.Fprintln(opts.Stdout, "No sessions found. Create one with asd new.")
+			return nil
+		}
+		fmt.Fprintln(opts.Stdout, "ID\tNAME\tAGENT\tSTATUS\tWORKSPACE")
 		for _, row := range result.Snapshot.Sessions {
 			fmt.Fprintf(opts.Stdout, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Name, row.AgentID, row.Lifecycle, row.WorkspaceID)
 		}
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
-	cmd.Flags().StringVar(&lifecycle, "lifecycle", "", "filter by lifecycle")
+	cmd.Flags().StringVar(&status, "status", "", "filter by lifecycle")
 	cmd.Flags().StringVar(&agentID, "agent", "", "filter by agent id")
 	cmd.Flags().StringVar(&workspaceID, "workspace", "", "filter by workspace id")
 	return cmd
@@ -125,7 +134,9 @@ func inspectCommand(opts Options) *cobra.Command {
 		if jsonOutput {
 			return writeJSON(opts.Stdout, result)
 		}
-		return writeJSON(opts.Stdout, result)
+		row := result.Session
+		fmt.Fprintf(opts.Stdout, "id: %s\nname: %s\nagent: %s\nworkspace: %s\nauthority: %s\nobserved_at: %s\nrevision: %d\nlifecycle: %s\nattachment: %s\nactivity: %s\nattempt: %d\nidentity_verified: %t\npersisted: %t\n", row.ID, row.Name, row.AgentID, row.WorkspaceID, row.Authority, row.ObservedAt.Format(time.RFC3339), result.Revision, row.Lifecycle, row.Attachment, row.Activity, row.Generation, row.HasIdentity, result.Persisted)
+		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
 	return cmd
@@ -133,23 +144,129 @@ func inspectCommand(opts Options) *cobra.Command {
 
 func newCommand(opts Options) *cobra.Command {
 	var name string
-	cmd := &cobra.Command{Use: "new <agent> <workspace> [-- <argv...>]", Short: "Create a session and attach to its terminal", Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireTTY(opts); err != nil {
-			return err
-		}
+	var jsonOutput bool
+	cmd := &cobra.Command{Use: "new [agent] [workspace] [-- <argv...>]", Short: "Create a session and attach to its terminal", Args: cobra.ArbitraryArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		tty := hasTTY(opts)
 		client, err := ownerClient(cmd.Context(), opts)
+		var foreground *owner.Runtime
+		ownerCtx := cmd.Context()
+		var stopOwner context.CancelFunc
+		if err != nil {
+			if !isOwnerUnavailable(err) {
+				return err
+			}
+			if !tty {
+				return session.NewError(session.CodeNotInteractive, "new", "creating without a foreground owner requires an interactive terminal", "start asd in a terminal, or attach to an existing owner")
+			}
+			ownerCtx, stopOwner = signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stopOwner()
+			foreground, err = owner.Start(ownerCtx, opts.Paths, opts.Config)
+			if err != nil {
+				return err
+			}
+			defer foreground.Close()
+			client = foreground.Client()
+		}
+		if !tty && !jsonOutput && len(args) < 2 {
+			return session.NewError(session.CodeInvalidConfiguration, "new", "non-interactive creation requires both agent and workspace", "pass explicit agent and workspace arguments")
+		}
+		agentID, workspacePath, extraArgs, err := resolveNewInputs(ownerCtx, client, args, opts)
 		if err != nil {
 			return err
 		}
-		result, err := client.Create(cmd.Context(), app.CreateRequest{Agent: agent.ID(args[0]), WorkspacePath: args[1], WorkspaceSource: workspace.SourceExplicit, Name: name, ExtraArgs: args[2:]})
+		result, err := client.Create(ownerCtx, app.CreateRequest{Agent: agentID, WorkspacePath: workspacePath, WorkspaceSource: workspace.SourceExplicit, Name: name, ExtraArgs: extraArgs})
 		if err != nil {
 			return err
+		}
+		if jsonOutput {
+			if err := writeJSON(opts.Stdout, result); err != nil {
+				return err
+			}
+			if foreground != nil {
+				return foreground.Serve(ownerCtx)
+			}
+			return nil
+		}
+		if !tty {
+			fmt.Fprintln(opts.Stdout, result.Session.ID)
+			return nil
 		}
 		fmt.Fprintf(opts.Stderr, "created %s; attaching\n", result.Session.ID)
-		return attach(cmd.Context(), client, string(result.Session.ID), "asd", opts)
+		if err := attach(ownerCtx, client, string(result.Session.ID), "asd", opts); err != nil {
+			return err
+		}
+		if foreground != nil {
+			return foreground.Serve(ownerCtx)
+		}
+		return nil
 	}}
 	cmd.Flags().StringVar(&name, "name", "", "session display name")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write the created session as JSON without attaching")
 	return cmd
+}
+
+func resolveNewInputs(ctx context.Context, client app.Client, args []string, opts Options) (agent.ID, string, []string, error) {
+	reader := bufio.NewReader(opts.Stdin)
+	var selected agent.ID
+	var workspacePath string
+	var extra []string
+	if len(args) > 0 {
+		selected = agent.ID(args[0])
+	}
+	if len(args) > 1 {
+		workspacePath = args[1]
+	}
+	if len(args) > 2 {
+		extra = append([]string(nil), args[2:]...)
+	}
+	if selected == "" {
+		scan, err := client.Scan(ctx, app.ScanRequest{})
+		if err != nil {
+			return "", "", nil, err
+		}
+		if len(scan.Agents) == 0 {
+			return "", "", nil, session.NewError(session.CodeNotFound, "agent", "no configured agent is available", "add an agent under agents in config.yaml, then run asd scan")
+		}
+		if len(scan.Agents) == 1 {
+			selected = scan.Agents[0].ID
+		} else {
+			var choices strings.Builder
+			for i, a := range scan.Agents {
+				fmt.Fprintf(&choices, "\n  %d) %s", i+1, a.ID)
+			}
+			fmt.Fprintf(opts.Stderr, "Choose an agent:%s\n> ", choices.String())
+			line, err := reader.ReadString('\n')
+			if err != nil && len(line) == 0 {
+				return "", "", nil, err
+			}
+			n, parseErr := strconv.Atoi(strings.TrimSpace(line))
+			if parseErr != nil || n < 1 || n > len(scan.Agents) {
+				return "", "", nil, session.NewError(session.CodeInvalidConfiguration, "agent", "agent selection is not a listed choice", "rerun new and choose one of the listed agent numbers")
+			}
+			selected = scan.Agents[n-1].ID
+		}
+	}
+	if workspacePath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", "", nil, err
+		}
+		fmt.Fprintf(opts.Stderr, "Workspace path [%s]: ", cwd)
+		line, err := reader.ReadString('\n')
+		if err != nil && len(line) == 0 {
+			return "", "", nil, err
+		}
+		workspacePath = strings.TrimSpace(line)
+		if workspacePath == "" {
+			workspacePath = cwd
+		}
+	}
+	return selected, workspacePath, extra, nil
+}
+
+func isOwnerUnavailable(err error) bool {
+	var typed *session.Error
+	return errors.As(err, &typed) && typed.Code == session.CodeOwnerUnavailable
 }
 
 func openCommand(opts Options) *cobra.Command {
@@ -168,31 +285,10 @@ func openCommand(opts Options) *cobra.Command {
 	return cmd
 }
 
-func detachCommand(opts Options) *cobra.Command {
-	var jsonOutput bool
-	cmd := &cobra.Command{Use: "detach <session-id>", Short: "Release the interactive attachment", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := ownerClient(cmd.Context(), opts)
-		if err != nil {
-			return err
-		}
-		result, err := client.Detach(cmd.Context(), app.DetachRequest{Ref: args[0]})
-		if err != nil {
-			return err
-		}
-		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
-		}
-		fmt.Fprintf(opts.Stdout, "detached %s\n", result.Session.ID)
-		return nil
-	}}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
-	return cmd
-}
-
 func renameCommand(opts Options) *cobra.Command {
 	var jsonOutput bool
 	cmd := &cobra.Command{Use: "rename <session-id> <name>", Short: "Rename a session", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := ownerClient(cmd.Context(), opts)
+		client, err := historicalRenameClient(cmd.Context(), opts, args[0])
 		if err != nil {
 			return err
 		}
@@ -216,24 +312,68 @@ func restartCommand(opts Options) *cobra.Command {
 		if !yes {
 			return errors.New("restart requires --yes confirmation")
 		}
-		client, err := ownerClient(cmd.Context(), opts)
+		ctx := cmd.Context()
+		client, err := ownerClient(ctx, opts)
+		var foreground *owner.Runtime
+		var stopOwner context.CancelFunc
 		if err != nil {
-			return err
+			if !isOwnerUnavailable(err) {
+				return err
+			}
+			if !hasTTY(opts) {
+				return session.NewError(session.CodeNotInteractive, args[0], "restarting without a foreground owner requires a terminal", "run restart from a terminal so ASD can own the new attempt")
+			}
+			ctx, stopOwner = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stopOwner()
+			foreground, err = owner.Start(ctx, opts.Paths, opts.Config)
+			if err != nil {
+				return err
+			}
+			defer foreground.Close()
+			client = foreground.Client()
 		}
-		result, err := client.Restart(cmd.Context(), app.RestartRequest{Ref: args[0], Force: force})
+		result, err := client.Restart(ctx, app.RestartRequest{Ref: args[0], Force: force})
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			if err := writeJSON(opts.Stdout, result); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintf(opts.Stdout, "restarted %s at attempt %d\n", result.Session.ID, result.Session.Generation)
 		}
-		fmt.Fprintf(opts.Stdout, "restarted %s at attempt %d\n", result.Session.ID, result.Session.Generation)
+		if foreground != nil {
+			return foreground.Serve(ctx)
+		}
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm restart")
 	cmd.Flags().BoolVar(&force, "force", false, "allow interrupting a live attempt")
 	return cmd
+}
+
+func historicalRenameClient(ctx context.Context, opts Options, ref string) (app.Client, error) {
+	client, err := ownerClient(ctx, opts)
+	if err == nil {
+		return client, nil
+	}
+	if !isOwnerUnavailable(err) {
+		return nil, err
+	}
+	offline, err := owner.Offline(ctx, opts.Paths, opts.Config)
+	if err != nil {
+		return nil, err
+	}
+	reading, err := offline.Get(ctx, app.GetRequest{Ref: ref})
+	if err != nil {
+		return nil, err
+	}
+	if reading.Session.Lifecycle.ProcessMayExist() {
+		return nil, session.NewError(session.CodeOwnerUnavailable, ref, "stored lifecycle may still have a process and cannot be safely reconciled offline", "start the foreground owner before editing this session")
+	}
+	return offline, nil
 }
 
 func stopCommand(opts Options) *cobra.Command {
@@ -291,31 +431,6 @@ func killCommand(opts Options) *cobra.Command {
 	return cmd
 }
 
-func deleteCommand(opts Options) *cobra.Command {
-	var jsonOutput, yes bool
-	cmd := &cobra.Command{Use: "delete <session-id>", Short: "Delete finished session metadata", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if !yes {
-			return errors.New("delete requires --yes confirmation")
-		}
-		client, err := ownerClient(cmd.Context(), opts)
-		if err != nil {
-			return err
-		}
-		result, err := client.Delete(cmd.Context(), app.DeleteRequest{Ref: args[0]})
-		if err != nil {
-			return err
-		}
-		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
-		}
-		fmt.Fprintf(opts.Stdout, "deleted %s\n", result.ID)
-		return nil
-	}}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
-	cmd.Flags().BoolVar(&yes, "yes", false, "confirm metadata deletion")
-	return cmd
-}
-
 func readClient(ctx context.Context, opts Options) (app.Client, error) {
 	client, err := ownerClient(ctx, opts)
 	if err == nil {
@@ -345,9 +460,12 @@ func writeJSON(w io.Writer, value any) error {
 	enc.SetEscapeHTML(false)
 	return enc.Encode(value)
 }
+func hasTTY(opts Options) bool {
+	return term.IsTerminal(opts.InputFD) && term.IsTerminal(opts.OutputFD)
+}
 func requireTTY(opts Options) error {
-	if !term.IsTerminal(opts.InputFD) || !term.IsTerminal(opts.OutputFD) {
-		return errors.New("this command requires an interactive terminal on stdin and stdout")
+	if !hasTTY(opts) {
+		return session.NewError(session.CodeNotInteractive, "terminal", "this command requires an interactive terminal on stdin and stdout", "run it from a terminal")
 	}
 	return nil
 }
