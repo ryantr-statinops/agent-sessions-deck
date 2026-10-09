@@ -45,7 +45,7 @@ Coordinator giữ PRODUCT, shared DTO/API, dependency changes, task DAG, stage s
 
 ### Dependency and worker assignment
 
-Dependency remains `03 → (04 ∥ 05) → 06`. Stage 04 và Stage 05 acceptance đã pass riêng; Stage 04 đã tích hợp vào `dev`, Stage 05 đang chờ tích hợp. Stage 06 chỉ bắt đầu sau khi cả hai stage đã tích hợp vào `dev`; W1 vẫn cần Stage 06 E2E gate.
+Dependency remains `03 → (04 ∥ 05) → 06`. Stage 04 and Stage 05 acceptance pass and both branches are integrated into `dev`; Stage 06 is now actionable. W1 still requires Stage 06 contract/retry/ownership acceptance and the end-to-end gate.
 
 - Worker target: `kilo`; bỏ `--model` để dùng default đã được user chọn. Mỗi dispatch phải ghi effective model và kết quả `ready`/completion; không coi model hiển thị ở terminal cũ là bằng chứng capacity hiện tại.
 - Coordinator owns PRODUCT/ADR decisions, shared interfaces, `go.mod`/`go.sum`, acceptance, docs/status and integration. Parallel task branches use isolated worktrees with explicit allowlists; merge to `dev` only after their tasks settle, then verify `dev` before it is ready for a PR to `main`.
@@ -137,6 +137,6 @@ This ledger decomposes the stage checklists into independently testable behavior
 
 Each code row is one small task and one commit with its behavior tests. Parallel tasks use isolated worktrees/branches, explicit disjoint file allowlists and frozen shared contracts; keep commits on those branches and merge into `dev` only after sibling tasks settle. Run `make check` and race acceptance on `dev` after integration; do not merge to `main` until `dev` passes. Each docs row changes exactly one file. Coordinator owns shared APIs, dependencies, acceptance, merge order and final integration. Never advance past failed tests or an unresolved worker.
 
-W1.0 contract freeze is complete in ADR 0003. Stage 03 is DONE. Stage 04 acceptance and integration into `dev` are complete. Stage 05 acceptance is DONE on `work/w1-stage05-runtime`; its tested commits and report/status still need integration into `dev`. Stage 06 starts after both 04 and 05 are present in `dev`. The W1 close gate requires Stage 03–06 reports/status and full E2E verification on `dev`.
+W1.0 contract freeze is complete in ADR 0003. Stage 03 is DONE. Stage 04 and Stage 05 acceptance/status are DONE and integrated into `dev` (Stage 05 fast-forward commit `31c10f4`); `make check` and `make test-race` pass after integration. Stage 06 is unblocked. W1 remains open until Stage 06 acceptance and full multi-terminal E2E verification pass on `dev`.
 
 The coordinator closes W1 only after Stage 03–06 gates and the full end-to-end make check pass. A worker completion message alone is not a gate.
