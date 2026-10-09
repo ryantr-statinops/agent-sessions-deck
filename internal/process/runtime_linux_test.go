@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	domain "github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/terminal"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
@@ -185,5 +187,59 @@ func TestRuntimeStopTimeoutRequiresExplicitForceKill(t *testing.T) {
 	kill, err := runtime.ForceKill(context.Background(), identity, 2*time.Second)
 	if err != nil || !kill.Delivered || kill.Timeout || kill.Terminated.Signal != "SIGKILL" {
 		t.Fatalf("explicit force kill = %+v, err=%v; want confirmed kill", kill, err)
+	}
+}
+
+func TestRuntimeOwnsTerminalDrainAcrossDetachAndReattach(t *testing.T) {
+	runtime, err := NewRuntime("owner-terminal", terminal.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := agent.NewCommand("/bin/sh", []string{"-c", "printf 'RUNTIME_SCREEN_MARKER\n'; exec sleep 30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := runtime.Launch(context.Background(), domain.LaunchRequest{
+		SessionID: "terminal-runtime", Generation: 1, Command: command, Workspace: ws,
+	})
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	lease := app.InteractiveLease{SessionID: "terminal-runtime", Generation: 1, Holder: "test-client", AcquiredAt: time.Now().UTC()}
+	first, err := runtime.Terminals().Subscribe(context.Background(), lease)
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	var screen strings.Builder
+	for _, line := range first.InitialSnapshot().Screen.Lines {
+		for _, cell := range line.Cells {
+			screen.WriteString(cell.Text)
+		}
+	}
+	if !strings.Contains(screen.String(), "RUNTIME_SCREEN_MARKER") {
+		t.Fatalf("runtime-owned screen lacks child output: %q", screen.String())
+	}
+	sequence := first.InitialSnapshot().Sequence
+	if err := first.Close(); err != nil {
+		t.Fatalf("detach: %v", err)
+	}
+	if err := syscall.Kill(identity.PID, 0); err != nil {
+		t.Fatalf("detach killed child process: %v", err)
+	}
+	second, err := runtime.Terminals().Subscribe(context.Background(), lease)
+	if err != nil {
+		t.Fatalf("reattach: %v", err)
+	}
+	if second.InitialSnapshot().Sequence != sequence {
+		t.Fatalf("reattach snapshot sequence = %d, want retained sequence %d", second.InitialSnapshot().Sequence, sequence)
+	}
+	_ = second.Close()
+	if _, err := runtime.ForceKill(context.Background(), identity, 2*time.Second); err != nil {
+		t.Fatalf("cleanup owned child: %v", err)
 	}
 }
