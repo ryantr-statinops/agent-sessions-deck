@@ -17,7 +17,7 @@ func TestParseProcStatUsesLastCommandDelimiterAndFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseProcStat() error = %v", err)
 	}
-	want := procStat{PID: 4242, PGID: 515, StartTicks: 987654}
+	want := procStat{PID: 4242, State: 'S', PGID: 515, StartTicks: 987654}
 	if got != want {
 		t.Fatalf("parseProcStat() = %+v, want %+v", got, want)
 	}
@@ -28,7 +28,7 @@ func TestParseProcStatRejectsIncompleteIdentityFields(t *testing.T) {
 		"missing delimiters": []byte("42 S 1 2"),
 		"truncated fields":   []byte("42 (worker) S 1 2"),
 		"invalid pid":        []byte("x (worker) S 1 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"),
-		"invalid pgid":       procStatLine(42, "worker", 0, 9),
+		"invalid pgid":       procStatLine(42, "worker", -1, 9),
 		"invalid start":      procStatLine(42, "worker", 7, 0),
 	}
 	for name, input := range tests {
