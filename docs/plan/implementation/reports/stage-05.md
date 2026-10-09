@@ -19,7 +19,7 @@ Chạy trên Linux, offline với vendor tree:
 - `make check` — PASS: fmt-check, vet, unit tests, integration tests, build, `asd --help`/`--version` smoke.
 - `make test-race` — PASS trên toàn module, gồm process/runtime, terminal, app và integration packages.
 - Runtime behavior fixtures chứng minh cwd/argv và exit code; controlling-PTY identity; một waiter; graceful stop; ignored TERM không tự escalation rồi explicit SIGKILL; identity mismatch và external sentinel; terminal detach/reattach; restart generation không giữ screen cũ; không overlap attempt; same-group residual process được ghi evidence; `setsid` descendant không bị signal cùng group.
-- `git diff --check dev...HEAD` sạch sau khi sửa whitespace ở hai file vendored.
+- `make check && make test-race` chạy lại trên `dev` sau fast-forward `31c10f4` — PASS; `git diff --check origin/dev...HEAD` sạch.
 
 ## Handoff
 
@@ -29,4 +29,4 @@ Chạy trên Linux, offline với vendor tree:
 
 ## Coordinator review
 
-Stage 05 acceptance được xác nhận trên `work/w1-stage05-runtime`; Stage 06 có thể bắt đầu sau khi Stage 05 đã tích hợp vào `dev`.
+Stage 05 acceptance passed and was fast-forward integrated into `dev` at `31c10f4`; the Wave 1 dependency on Stage 05 is satisfied. Stage 06 is now unblocked. Wave 1 itself remains open pending Stage 06 and its E2E gate.
