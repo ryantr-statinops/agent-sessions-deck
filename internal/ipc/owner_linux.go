@@ -18,9 +18,8 @@ import (
 
 var ErrOwnerLocked = errors.New("an ASD foreground owner already holds the state home lock")
 
-// Owner is the lifetime claim for one foreground runtime. Bootstrap acquires the
-// state-home lock before binding the control socket; socket policy is applied by
-// the caller until the dedicated endpoint/path layer is installed.
+// Owner holds the state-home lock and listener for one foreground runtime.
+// Bootstrap always acquires the lock before touching the socket path.
 type Owner struct {
 	mu         sync.Mutex
 	lock       *store.Lock
@@ -29,9 +28,17 @@ type Owner struct {
 	closed     bool
 }
 
-// Bootstrap atomically claims the state home and binds its Unix listener. It
-// never unlinks an existing socket: stale-socket classification is a separate
-// checked operation after the lock has been acquired.
+// BootstrapPaths selects the secure per-state endpoint, then claims ownership.
+func BootstrapPaths(paths config.Paths) (*Owner, error) {
+	socketPath, err := SocketPath(paths)
+	if err != nil {
+		return nil, err
+	}
+	return Bootstrap(paths, socketPath)
+}
+
+// Bootstrap atomically claims the state home before inspecting or binding its
+// socket. It removes only an owned socket that refuses a connection.
 func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	if paths.StateDir == "" || !filepath.IsAbs(paths.StateDir) {
 		return nil, errors.New("owner bootstrap requires an absolute state directory")
@@ -56,11 +63,11 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mint owner instance ID: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
-		return nil, fmt.Errorf("create owner socket directory: %w", err)
+	if err := ensurePrivateDirectory(filepath.Dir(socketPath)); err != nil {
+		return nil, fmt.Errorf("secure socket directory: %w", err)
 	}
-	if err := os.Chmod(filepath.Dir(socketPath), 0o700); err != nil {
-		return nil, fmt.Errorf("secure owner socket directory: %w", err)
+	if err := removeStaleSocket(socketPath); err != nil {
+		return nil, err
 	}
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
 	if err != nil {
