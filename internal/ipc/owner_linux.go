@@ -98,6 +98,14 @@ func (o *Owner) Listener() *net.UnixListener {
 	return o.listener
 }
 
+// SessionsStore returns a store bound to this owner's lifetime lock.
+func (o *Owner) SessionsStore(path string) *store.SessionsStore {
+	if o == nil {
+		return nil
+	}
+	return store.NewOwnerSessionsStore(path, o.lock)
+}
+
 // Close stops accepting new connections before releasing the owner lock.
 func (o *Owner) Close() error {
 	if o == nil {
