@@ -110,6 +110,9 @@ func (o *Owner) Close() error {
 	}
 	o.closed = true
 	listenerErr := o.listener.Close()
+	if errors.Is(listenerErr, net.ErrClosed) {
+		listenerErr = nil
+	}
 	lockErr := o.lock.Release()
 	return errors.Join(listenerErr, lockErr)
 }
