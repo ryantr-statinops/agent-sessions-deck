@@ -274,6 +274,13 @@ func (r *remoteSubscription) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
+	r.mu.Lock()
+	if r.gap {
+		r.gap = false
+		r.mu.Unlock()
+		return 0, app.ErrTerminalOutputGap
+	}
+	r.mu.Unlock()
 	select {
 	case data, ok := <-r.raw:
 		if !ok {
@@ -314,7 +321,6 @@ func (r *remoteSubscription) Close() error {
 	var err error
 	r.closeOnce.Do(func() {
 		err = r.send(Frame{Version: ProtocolVersion, Type: FrameTerminalClose})
-		close(r.done)
 		err = errors.Join(err, r.conn.Close())
 	})
 	return err
@@ -333,6 +339,10 @@ func (r *remoteSubscription) receive() {
 		}
 		switch frame.Type {
 		case FrameTerminalBytes:
+			if frame.Error != nil {
+				r.setError(app.ErrTerminalOutputGap)
+				continue
+			}
 			var data []byte
 			if json.Unmarshal(frame.Payload, &data) != nil {
 				r.setError(ErrInvalidFrame)
@@ -412,4 +422,22 @@ func (r *remoteSubscription) readError() error {
 		return r.readErr
 	}
 	return io.EOF
+}
+
+// Ping completes the versioned owner handshake without dispatching a service operation.
+func (c *Client) Ping(ctx context.Context) error {
+	conn, err := (&net.Dialer{Timeout: requestTimeout}).DialContext(ctx, "unix", c.path)
+	if err != nil {
+		return session.WrapError(session.CodeOwnerUnavailable, "owner", "cannot connect to the foreground owner", "start the owner in another terminal", err)
+	}
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		_ = conn.Close()
+		return session.NewError(session.CodeOwnerUnavailable, "owner", "owner endpoint is not a Unix socket", "check the configured runtime directory")
+	}
+	defer unixConn.Close()
+	if _, err := c.handshake(ctx, unixConn); err != nil {
+		return session.WrapError(session.CodeOwnerUnavailable, "owner", "foreground owner handshake failed", "check the owner version and retry", err)
+	}
+	return nil
 }

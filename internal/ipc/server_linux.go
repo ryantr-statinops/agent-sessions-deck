@@ -159,10 +159,11 @@ func (s *Server) serveOpen(ownerCtx context.Context, conn *net.UnixConn, request
 func (s *Server) stream(ownerCtx context.Context, conn *net.UnixConn, terminal app.TerminalSubscription) {
 	defer func() {
 		_ = terminal.Close()
-		ctx, cancel := context.WithTimeout(ownerCtx, requestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
 		_, _ = s.client.Detach(ctx, app.DetachRequest{Ref: string(terminal.SessionID())})
 	}()
+	_ = conn.SetDeadline(time.Time{})
 	var writeMu sync.Mutex
 	write := func(frame Frame) error {
 		writeMu.Lock()
@@ -183,12 +184,19 @@ func (s *Server) stream(ownerCtx context.Context, conn *net.UnixConn, terminal a
 				payload, _ := json.Marshal(buf[:n])
 				if write(Frame{Version: ProtocolVersion, Type: FrameTerminalBytes, Payload: payload}) != nil {
 					cancel()
+					_ = conn.Close()
 					return
 				}
 			}
 			if err != nil {
-				if !errors.Is(err, io.EOF) && !errors.Is(err, app.ErrTerminalOutputGap) {
+				if errors.Is(err, app.ErrTerminalOutputGap) {
+					gap := session.NewError(session.CodeSessionIOFailed, string(terminal.SessionID()), "terminal byte subscriber fell behind", "detach and reattach to start a fresh stream")
+					_ = write(Frame{Version: ProtocolVersion, Type: FrameTerminalBytes, Error: ErrorToWire(gap)})
+					return
+				}
+				if !errors.Is(err, io.EOF) {
 					cancel()
+					_ = conn.Close()
 				}
 				return
 			}
@@ -200,17 +208,18 @@ func (s *Server) stream(ownerCtx context.Context, conn *net.UnixConn, terminal a
 			frame, err := terminal.ReadFrame()
 			if err != nil {
 				cancel()
+				_ = conn.Close()
 				return
 			}
 			payload, marshalErr := json.Marshal(frame)
 			if marshalErr != nil || write(Frame{Version: ProtocolVersion, Type: FrameTerminalScreen, Payload: payload}) != nil {
 				cancel()
+				_ = conn.Close()
 				return
 			}
 		}
 	}()
 	for streamCtx.Err() == nil {
-		_ = conn.SetReadDeadline(time.Now().Add(requestTimeout))
 		frame, err := ReadFrame(conn)
 		if err != nil {
 			break
@@ -219,15 +228,22 @@ func (s *Server) stream(ownerCtx context.Context, conn *net.UnixConn, terminal a
 		case FrameTerminalInput:
 			var data []byte
 			if json.Unmarshal(frame.Payload, &data) != nil || len(data) > MaxFrameBytes/2 {
+				cancel()
 				break
 			}
 			if _, err := terminal.Write(data); err != nil {
+				cancel()
 				break
 			}
 		case FrameTerminalResize:
 			var size struct{ Width, Height int }
-			if json.Unmarshal(frame.Payload, &size) == nil && size.Width > 0 && size.Height > 0 {
-				_ = terminal.Resize(size.Width, size.Height)
+			if json.Unmarshal(frame.Payload, &size) != nil || size.Width <= 0 || size.Height <= 0 {
+				cancel()
+				break
+			}
+			if err := terminal.Resize(size.Width, size.Height); err != nil {
+				cancel()
+				break
 			}
 		case FrameTerminalClose:
 			cancel()
@@ -236,7 +252,7 @@ func (s *Server) stream(ownerCtx context.Context, conn *net.UnixConn, terminal a
 			readers.Wait()
 			return
 		default:
-			break
+			cancel()
 		}
 	}
 	cancel()
