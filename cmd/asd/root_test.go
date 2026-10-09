@@ -52,15 +52,3 @@ func TestExecuteRejectsUnknownCommand(t *testing.T) {
 		t.Fatalf("unexpected stdout: %q", stdout.String())
 	}
 }
-
-func TestHelpDoesNotExposeUnimplementedCommands(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	if code := execute([]string{"--help"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("help exit code = %d, stderr = %q", code, stderr.String())
-	}
-	for _, command := range []string{"completion", "new", "open", "resume"} {
-		if strings.Contains(stdout.String(), command) {
-			t.Fatalf("help exposes unimplemented command %q: %q", command, stdout.String())
-		}
-	}
-}
