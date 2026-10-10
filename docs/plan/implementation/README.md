@@ -2,7 +2,7 @@
 
 Nguồn yêu cầu: [PRODUCT.md](../../../PRODUCT.md). Ngày lập: 2026-09-28.
 
-Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 01 đã hoàn tất engineering baseline ([report](reports/stage-01.md)); Stage 02–05 `DONE` với report/evidence riêng. Stage 06–15 vẫn `PLANNED`. Đây là kế hoạch triển khai, không phải báo cáo tính năng đã hoàn tất. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
+Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 01 đã hoàn tất engineering baseline ([report](reports/stage-01.md)); Stage 02–05 `DONE` với report/evidence riêng; Stage 06 `DONE` ([report](reports/stage-06.md)). Stage 07–15 vẫn `PLANNED`. Đây là kế hoạch triển khai, không phải báo cáo tính năng đã hoàn tất. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
 
 ## Mục tiêu và các mốc bàn giao
 
