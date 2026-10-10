@@ -44,6 +44,9 @@ func (r *Runtime) Close() error { return r.claim.Close() }
 func Start(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime, error) {
 	claim, err := ipc.BootstrapPaths(paths)
 	if err != nil {
+		if errors.Is(err, ipc.ErrOwnerLocked) {
+			return nil, session.WrapError(session.CodeOwnerUnavailable, "owner", "another foreground owner already holds this state home", "use that owner's client socket or stop it before starting another owner", err)
+		}
 		return nil, err
 	}
 	service, err := buildService(ctx, paths, cfg, claim.SessionsStore(paths.SessionsFile()), claim.InstanceID(), session.AuthorityLive)
