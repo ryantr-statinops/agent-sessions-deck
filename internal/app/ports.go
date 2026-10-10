@@ -40,14 +40,8 @@ type (
 )
 
 // TerminalSubscription is the interactive stream claim the owner hands to an
-// attached client.
-//
-// It is deliberately separate from the domain: the domain describes a session
-// and an interactive lease, and it never sees a byte stream. The runtime owner
-// owns the PTY, and the terminal view owns reading and writing it. The
-// application layer acquires the subscription, records who holds it and closes
-// it on detach; it never calls Read or Write itself, and it never publishes what
-// crosses them.
+// attached client. The initial snapshot and following frames form an ordered
+// screen stream; the raw byte stream remains available for byte-oriented clients.
 type TerminalSubscription interface {
 	// SessionID is the session the subscription streams.
 	SessionID() session.ID
@@ -56,14 +50,18 @@ type TerminalSubscription interface {
 	Generation() session.Generation
 	// Holder names the client that owns the stream.
 	Holder() string
-	// Read and Write carry terminal bytes between the agent's PTY and the
-	// client. Only the terminal view calls them.
+	// InitialSnapshot is captured atomically with subscription registration.
+	InitialSnapshot() TerminalSnapshot
+	// ReadFrame returns an ordered screen delta or a full snapshot when bounded
+	// render backpressure requires resynchronization. Exactly one frame payload is set.
+	ReadFrame() (TerminalFrame, error)
+	// Read and Write carry raw terminal bytes. Raw Read is bounded; after
+	// ErrTerminalOutputGap, resubscribe or use the screen-frame stream.
 	Read(p []byte) (int, error)
 	Write(p []byte) (int, error)
 	// Resize reports a new terminal size in cells.
 	Resize(width, height int) error
-	// Close ends the stream. It must not terminate the session: leaving the
-	// interactive view detaches, it never kills the agent.
+	// Close ends the subscription. It must not terminate the session.
 	Close() error
 }
 
