@@ -94,7 +94,7 @@ type testSubscription struct {
 }
 
 func newTestSubscription(id session.ID, generation session.Generation, holder string) *testSubscription {
-	return &testSubscription{id: id, generation: generation, holder: holder, raw: make(chan []byte, 4), frames: make(chan app.TerminalFrame, 4), writes: make(chan []byte, 2), resizes: make(chan [2]int, 2), done: make(chan struct{})}
+	return &testSubscription{id: id, generation: generation, holder: holder, raw: make(chan []byte, 128), frames: make(chan app.TerminalFrame, 4), writes: make(chan []byte, 2), resizes: make(chan [2]int, 2), done: make(chan struct{})}
 }
 func (s *testSubscription) SessionID() session.ID                 { return s.id }
 func (s *testSubscription) Generation() session.Generation        { return s.generation }
@@ -153,6 +153,18 @@ func TestIPCOpenStreamsBytesInputScreenAndDetachesOnDisconnect(t *testing.T) {
 	n, err := opened.Terminal.Read(buffer)
 	if err != nil || string(buffer[:n]) != "child output" {
 		t.Fatalf("terminal output = %q, %v", buffer[:n], err)
+	}
+	remote := opened.Terminal.(*remoteSubscription)
+	for range clientQueueSize * 2 {
+		service.terminal.raw <- []byte("burst")
+	}
+	select {
+	case <-remote.rawGap:
+	case <-time.After(2 * time.Second):
+		t.Fatal("raw output queue did not report a gap")
+	}
+	if _, err := opened.Terminal.Read(buffer); !errors.Is(err, app.ErrTerminalOutputGap) {
+		t.Fatalf("raw stream gap = %v", err)
 	}
 	if _, err := opened.Terminal.Write([]byte("input")); err != nil {
 		t.Fatal(err)

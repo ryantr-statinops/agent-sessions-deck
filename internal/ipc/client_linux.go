@@ -247,11 +247,14 @@ type remoteSubscription struct {
 	frames     chan app.TerminalFrame
 	done       chan struct{}
 	gap        bool
+	rawEnded   bool
+	rawGap     chan struct{}
+	rawGapOnce sync.Once
 	current    app.TerminalSnapshot
 }
 
 func newRemoteSubscription(conn *net.UnixConn, id string, generation session.Generation, holder string, snapshot app.TerminalSnapshot) *remoteSubscription {
-	r := &remoteSubscription{conn: conn, sessionID: id, generation: generation, holder: holder, initial: snapshot, current: snapshot, raw: make(chan []byte, clientQueueSize), frames: make(chan app.TerminalFrame, 1), done: make(chan struct{})}
+	r := &remoteSubscription{conn: conn, sessionID: id, generation: generation, holder: holder, initial: snapshot, current: snapshot, raw: make(chan []byte, clientQueueSize), frames: make(chan app.TerminalFrame, 1), done: make(chan struct{}), rawGap: make(chan struct{})}
 	go r.receive()
 	return r
 }
@@ -277,8 +280,13 @@ func (r *remoteSubscription) Read(p []byte) (int, error) {
 	r.mu.Lock()
 	if r.gap {
 		r.gap = false
+		r.rawEnded = true
 		r.mu.Unlock()
 		return 0, app.ErrTerminalOutputGap
+	}
+	if r.rawEnded {
+		r.mu.Unlock()
+		return 0, io.EOF
 	}
 	r.mu.Unlock()
 	select {
@@ -288,10 +296,16 @@ func (r *remoteSubscription) Read(p []byte) (int, error) {
 		}
 		n := copy(p, data)
 		if n < len(data) {
-			r.setError(io.ErrShortBuffer)
-			return n, io.ErrShortBuffer
+			r.markRawGap()
+			return n, app.ErrTerminalOutputGap
 		}
 		return n, nil
+	case <-r.rawGap:
+		r.mu.Lock()
+		r.gap = false
+		r.rawEnded = true
+		r.mu.Unlock()
+		return 0, app.ErrTerminalOutputGap
 	case <-r.done:
 		return 0, r.readError()
 	}
@@ -340,7 +354,7 @@ func (r *remoteSubscription) receive() {
 		switch frame.Type {
 		case FrameTerminalBytes:
 			if frame.Error != nil {
-				r.setError(app.ErrTerminalOutputGap)
+				r.markRawGap()
 				continue
 			}
 			var data []byte
@@ -348,12 +362,17 @@ func (r *remoteSubscription) receive() {
 				r.setError(ErrInvalidFrame)
 				return
 			}
+			r.mu.Lock()
+			if r.rawEnded {
+				r.mu.Unlock()
+				continue
+			}
 			select {
 			case r.raw <- data:
-			default:
-				r.mu.Lock()
-				r.gap = true
 				r.mu.Unlock()
+			default:
+				r.mu.Unlock()
+				r.markRawGap()
 			}
 		case FrameTerminalScreen:
 			var next app.TerminalFrame
@@ -411,6 +430,26 @@ func (r *remoteSubscription) setError(err error) {
 	}
 	r.mu.Unlock()
 }
+
+func (r *remoteSubscription) markRawGap() {
+	r.mu.Lock()
+	r.gap = true
+	r.rawEnded = true
+	r.mu.Unlock()
+	r.rawGapOnce.Do(func() { close(r.rawGap) })
+	r.discardRaw()
+}
+
+func (r *remoteSubscription) discardRaw() {
+	for {
+		select {
+		case <-r.raw:
+		default:
+			return
+		}
+	}
+}
+
 func (r *remoteSubscription) readError() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
