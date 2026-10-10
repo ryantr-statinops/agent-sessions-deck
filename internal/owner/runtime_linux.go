@@ -74,13 +74,25 @@ func Offline(ctx context.Context, paths config.Paths, cfg config.Config) (*app.S
 func (r *Runtime) Serve(ctx context.Context) error { return r.server.Serve(ctx) }
 
 func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st app.SessionStore, ownerID string, authority session.Authority) (*app.Service, error) {
-	providers := make([]agent.Provider, 0, len(cfg.Agents))
-	for _, definition := range cfg.Agents {
-		p, err := generic.New(agent.ID(definition.ID), definition.Name, definition.Executable, definition.Args)
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	var providers []agent.Provider
+	if authority == session.AuthorityLive {
+		_, discovered, err := probeAgents(ctx, cfg)
 		if err != nil {
 			return nil, err
 		}
-		providers = append(providers, p)
+		providers = discovered
+	} else {
+		providers = make([]agent.Provider, 0, len(cfg.Agents))
+		for _, definition := range cfg.Agents {
+			p, err := generic.New(agent.ID(definition.ID), definition.Name, definition.Executable, definition.Args)
+			if err != nil {
+				return nil, err
+			}
+			providers = append(providers, p)
+		}
 	}
 	registry, err := agent.NewMapRegistry(providers...)
 	if err != nil {

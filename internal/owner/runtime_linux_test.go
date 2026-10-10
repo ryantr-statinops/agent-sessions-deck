@@ -4,6 +4,8 @@ package owner
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -55,5 +57,33 @@ func TestForegroundAndOfflineServicesUseTheirAuthorityAndLockModes(t *testing.T)
 	}
 	if stored.Snapshot.Authority != session.AuthorityStored {
 		t.Fatalf("offline authority = %q", stored.Snapshot.Authority)
+	}
+}
+
+func TestProbeAgentsDistinguishesAvailableMissingAndUncertain(t *testing.T) {
+	binDir := t.TempDir()
+	for name, output := range map[string]string{"codex": "codex version test\n", "opencode": "unrelated executable\n"} {
+		path := filepath.Join(binDir, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '%s' "+"'"+output+"'"+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", binDir)
+	probes, err := ProbeAgents(context.Background(), config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[string]AgentProbe, len(probes))
+	for _, probe := range probes {
+		byID[string(probe.ID)] = probe
+	}
+	if byID["codex"].Status != "available" || byID["codex"].Path == "" {
+		t.Fatalf("codex probe = %+v", byID["codex"])
+	}
+	if byID["claude"].Status != "not-found" {
+		t.Fatalf("claude probe = %+v", byID["claude"])
+	}
+	if byID["opencode"].Status != "uncertain" || byID["opencode"].Reason == "" {
+		t.Fatalf("opencode probe = %+v", byID["opencode"])
 	}
 }
