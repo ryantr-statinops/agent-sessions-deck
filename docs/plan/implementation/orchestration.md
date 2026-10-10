@@ -137,6 +137,6 @@ This ledger decomposes the stage checklists into independently testable behavior
 
 Each code row is one small task and one commit with its behavior tests. Parallel tasks use isolated worktrees/branches, explicit disjoint file allowlists and frozen shared contracts; keep commits on those branches and merge into `dev` only after sibling tasks settle. Run `make check` and race acceptance on `dev` after integration; do not merge to `main` until `dev` passes. Each docs row changes exactly one file. Coordinator owns shared APIs, dependencies, acceptance, merge order and final integration. Never advance past failed tests or an unresolved worker.
 
-W1.0 contract freeze is complete in ADR 0003. Stage 03 is DONE. Stage 04 and Stage 05 acceptance/status are DONE and integrated into `dev` (Stage 05 fast-forward commit `31c10f4`); `make check` and `make test-race` pass after integration. Stage 06 is unblocked. W1 remains open until Stage 06 acceptance and full multi-terminal E2E verification pass on `dev`.
+W1.0 contract freeze is complete in ADR 0003. Stages 03, 04, 05, and 06 are complete on `dev`, with per-stage reports and acceptance evidence. Stage 06 multi-terminal E2E passed; `make check` and `make test-race` pass on the integrated branch. W1 is closed; Stage 07 is the next planned stage.
 
-The coordinator closes W1 only after Stage 03–06 gates and the full end-to-end make check pass. A worker completion message alone is not a gate.
+The W1 close gate is satisfied by all Stage 03–06 status/report artifacts, end-to-end owner/client verification, and the full `make check` plus race gate. W1-00.55 records this closure; merge to `main` remains a separate PR workflow.
