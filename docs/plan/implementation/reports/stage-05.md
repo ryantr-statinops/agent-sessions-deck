@@ -29,4 +29,4 @@ Chạy trên Linux, offline với vendor tree:
 
 ## Coordinator review
 
-Stage 05 acceptance passed and was fast-forward integrated into `dev` at `31c10f4`; the Wave 1 dependency on Stage 05 is satisfied. Stage 06 is now unblocked. Wave 1 itself remains open pending Stage 06 and its E2E gate.
+Stage 05 acceptance passed and was fast-forward integrated into `dev` at `31c10f4`; the Wave 1 dependency on Stage 05 is satisfied. Stage 06 acceptance and end-to-end gates passed; Wave 1 is closed in the orchestration ledger.
