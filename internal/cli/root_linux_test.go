@@ -41,14 +41,18 @@ func TestListJSONUsesLiveOwnerWhenAvailable(t *testing.T) {
 		cancel()
 		t.Fatal(err)
 	}
-	var result app.ListResult
+	var result listDocument
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		cancel()
 		t.Fatalf("list JSON %q: %v", stdout.String(), err)
 	}
-	if result.Snapshot.Authority != session.AuthorityLive || result.Snapshot.Revision != 9 {
+	if result.Authority != session.AuthorityLive || result.Revision != 9 || result.Command != "list" {
 		cancel()
-		t.Fatalf("list result authority/revision = %q/%d", result.Snapshot.Authority, result.Snapshot.Revision)
+		t.Fatalf("list authority/revision/command = %q/%d/%q", result.Authority, result.Revision, result.Command)
+	}
+	if bytes.Contains(stdout.Bytes(), []byte("Snapshot")) {
+		cancel()
+		t.Fatalf("JSON uses Go field names: %s", stdout.String())
 	}
 	cancel()
 	select {
@@ -69,11 +73,11 @@ func TestListJSONFallsBackToStoredAuthorityWithoutOwner(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var result app.ListResult
+	var result listDocument
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("list JSON %q: %v", stdout.String(), err)
 	}
-	if result.Snapshot.Authority != session.AuthorityStored {
-		t.Fatalf("offline list authority = %q", result.Snapshot.Authority)
+	if result.Authority != session.AuthorityStored || result.Command != "list" {
+		t.Fatalf("offline list authority/command = %q/%q", result.Authority, result.Command)
 	}
 }
