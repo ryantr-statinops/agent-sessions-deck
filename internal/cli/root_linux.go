@@ -23,6 +23,7 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/ipc"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/process"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 	"github.com/spf13/cobra"
@@ -441,7 +442,13 @@ func historicalRenameClient(ctx context.Context, opts Options, ref string) (app.
 		return nil, err
 	}
 	if reading.Session.Lifecycle.ProcessMayExist() {
-		return nil, session.NewError(session.CodeOwnerUnavailable, ref, "stored lifecycle may still have a process and cannot be safely reconciled offline", "start the foreground owner before editing this session")
+		if !reading.Session.HasIdentity {
+			return nil, session.NewError(session.CodeOwnerUnavailable, ref, "stored active lifecycle has no process identity to reconcile", "start the foreground owner before editing this session")
+		}
+		observation := process.Observe(reading.Session.Identity)
+		if _, err := offline.Report(ctx, app.ReportRequest{Ref: string(reading.Session.ID), Attempt: reading.Session.Generation, Kind: app.ReportReconciled, Liveness: observation}); err != nil {
+			return nil, err
+		}
 	}
 	return offline, nil
 }
