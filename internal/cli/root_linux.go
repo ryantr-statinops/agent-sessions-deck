@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -40,7 +41,7 @@ type Options struct {
 
 // NewRoot builds the complete Stage 06 CLI command tree.
 func NewRoot(opts Options) *cobra.Command {
-	root := &cobra.Command{Use: "asd", Short: "Manage coding-agent sessions from a local terminal.", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "asd", Short: "Manage coding-agent sessions from a local terminal.", Long: "Without a subcommand, asd becomes the foreground owner and serves other terminal clients until Ctrl-C. This V1 foreground owner is not a daemon; the dashboard/TUI is Stage 07.", Example: "  asd\n  asd list --json", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true}
 	root.SetIn(opts.Stdin)
 	root.SetOut(opts.Stdout)
 	root.SetErr(opts.Stderr)
@@ -60,27 +61,58 @@ func NewRoot(opts Options) *cobra.Command {
 
 func runtimeID(r *owner.Runtime) string { return r.InstanceID() }
 
+type scanReport struct {
+	ObservedAt time.Time          `json:"observed_at"`
+	Agents     []owner.AgentProbe `json:"agents"`
+}
+
 func scanCommand(opts Options) *cobra.Command {
 	var jsonOutput bool
-	cmd := &cobra.Command{Use: "scan", Short: "List configured agent definitions and capabilities", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		client, err := readClient(cmd.Context(), opts)
+	var filters []string
+	cmd := &cobra.Command{Use: "scan", Short: "Probe configured and built-in agent executables", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		probes, err := owner.ProbeAgents(cmd.Context(), opts.Config)
 		if err != nil {
 			return err
 		}
-		result, err := client.Scan(cmd.Context(), app.ScanRequest{})
-		if err != nil {
-			return err
+		if len(filters) > 0 {
+			selected := make(map[string]bool, len(filters))
+			for _, id := range filters {
+				selected[id] = true
+			}
+			filtered := probes[:0]
+			for _, probe := range probes {
+				if selected[string(probe.ID)] {
+					filtered = append(filtered, probe)
+					delete(selected, string(probe.ID))
+				}
+			}
+			if len(selected) > 0 {
+				return session.NewError(session.CodeNotFound, strings.Join(sortedKeys(selected), ","), "one or more requested agents were not found", "run asd scan without --agent to see the supported identifiers")
+			}
+			probes = filtered
 		}
+		report := scanReport{ObservedAt: time.Now().UTC(), Agents: probes}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, report)
 		}
-		for _, item := range result.Agents {
-			fmt.Fprintf(opts.Stdout, "%s\tlaunch=%t\tinteractive=%t\n", item.ID, item.Launchable, item.Interactive)
+		for _, probe := range probes {
+			fmt.Fprintf(opts.Stdout, "%s\t%s\t%s\t%s\n", probe.ID, probe.Status, probe.Path, probe.Reason)
 		}
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
+	cmd.Flags().StringSliceVar(&filters, "agent", nil, "limit probes to these agent IDs")
+	cmd.Example = "  asd scan\n  asd scan --agent codex --json"
 	return cmd
+}
+
+func sortedKeys(values map[string]bool) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func listCommand(opts Options) *cobra.Command {
@@ -100,7 +132,7 @@ func listCommand(opts Options) *cobra.Command {
 			return err
 		}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, listDocumentOf(result))
 		}
 		fmt.Fprintf(opts.Stdout, "authority=%s observed_at=%s revision=%d\n", result.Snapshot.Authority, result.Snapshot.ObservedAt.Format(time.RFC3339), result.Snapshot.Revision)
 		if len(result.Snapshot.Sessions) == 0 {
@@ -117,6 +149,7 @@ func listCommand(opts Options) *cobra.Command {
 	cmd.Flags().StringVar(&status, "status", "", "filter by lifecycle")
 	cmd.Flags().StringVar(&agentID, "agent", "", "filter by agent id")
 	cmd.Flags().StringVar(&workspaceID, "workspace", "", "filter by workspace id")
+	cmd.Example = "  asd list --status running\n  asd list --agent codex --workspace /work/project --json"
 	return cmd
 }
 
@@ -131,14 +164,31 @@ func inspectCommand(opts Options) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		report := inspectDocumentOf(cmd.Context(), result)
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, report)
 		}
 		row := result.Session
 		fmt.Fprintf(opts.Stdout, "id: %s\nname: %s\nagent: %s\nworkspace: %s\nauthority: %s\nobserved_at: %s\nrevision: %d\nlifecycle: %s\nattachment: %s\nactivity: %s\nattempt: %d\nidentity_verified: %t\npersisted: %t\n", row.ID, row.Name, row.AgentID, row.WorkspaceID, row.Authority, row.ObservedAt.Format(time.RFC3339), result.Revision, row.Lifecycle, row.Attachment, row.Activity, row.Generation, row.HasIdentity, result.Persisted)
+		if !row.Command.IsZero() {
+			fmt.Fprintf(opts.Stdout, "command: %s %s\n", row.Command.Executable(), strings.Join(row.Command.Args(), " "))
+		}
+		if row.HasIdentity {
+			fmt.Fprintf(opts.Stdout, "identity: %s\n", row.Identity.Describe())
+		}
+		if reason := row.Reason.String(); reason != "" {
+			fmt.Fprintf(opts.Stdout, "exit_reason: %s\n", reason)
+		}
+		if report.Git != nil {
+			fmt.Fprintf(opts.Stdout, "git_root: %s\ngit_branch: %s\ngit_dirty: %t\ngit_changed_files: %d\n", report.Git.Root, report.Git.Branch, report.Git.Dirty, report.Git.ChangedFiles)
+		}
+		if report.WorkspaceError != "" {
+			fmt.Fprintf(opts.Stderr, "workspace detail unavailable: %s\n", report.WorkspaceError)
+		}
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
+	cmd.Example = "  asd inspect 01JQASDWSDECK0001\n  asd inspect 01JQASDWSDECK0001 --json"
 	return cmd
 }
 
@@ -167,7 +217,7 @@ func newCommand(opts Options) *cobra.Command {
 			defer foreground.Close()
 			client = foreground.Client()
 		}
-		if !tty && !jsonOutput && len(args) < 2 {
+		if !tty && len(args) < 2 {
 			return session.NewError(session.CodeInvalidConfiguration, "new", "non-interactive creation requires both agent and workspace", "pass explicit agent and workspace arguments")
 		}
 		agentID, workspacePath, extraArgs, err := resolveNewInputs(ownerCtx, client, args, opts)
@@ -179,7 +229,7 @@ func newCommand(opts Options) *cobra.Command {
 			return err
 		}
 		if jsonOutput {
-			if err := writeJSON(opts.Stdout, result); err != nil {
+			if err := writeJSON(opts.Stdout, mutationDocumentOf("new", result.Session, result.Revision)); err != nil {
 				return err
 			}
 			if foreground != nil {
@@ -202,6 +252,7 @@ func newCommand(opts Options) *cobra.Command {
 	}}
 	cmd.Flags().StringVar(&name, "name", "", "session display name")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write the created session as JSON without attaching")
+	cmd.Example = "  asd new codex /work/project\n  asd new codex /work/project --name review -- --help"
 	return cmd
 }
 
@@ -272,16 +323,21 @@ func isOwnerUnavailable(err error) bool {
 func openCommand(opts Options) *cobra.Command {
 	var holder string
 	cmd := &cobra.Command{Use: "open <session-id>", Short: "Attach to a running session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireTTY(opts); err != nil {
-			return err
-		}
 		client, err := ownerClient(cmd.Context(), opts)
 		if err != nil {
+			if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED) {
+				return session.NewError(session.CodeSessionIOFailed, args[0], "no foreground owner can provide this session's PTY", "start asd in a terminal, then run open again")
+			}
+			return err
+		}
+		if err := requireTTY(opts); err != nil {
 			return err
 		}
 		return attach(cmd.Context(), client, args[0], holder, opts)
 	}}
 	cmd.Flags().StringVar(&holder, "name", "terminal", "name this interactive client")
+	cmd.Long = "Attach to a live owner session. Press Ctrl+] to detach; the child session continues running."
+	cmd.Example = "  asd open 01JQASDWSDECK0001\n  asd open 01JQASDWSDECK0001 --name terminal-b"
 	return cmd
 }
 
@@ -297,21 +353,19 @@ func renameCommand(opts Options) *cobra.Command {
 			return err
 		}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, mutationDocumentOf("rename", result.Session, result.Revision))
 		}
 		fmt.Fprintf(opts.Stdout, "renamed %s\n", result.Session.ID)
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
+	cmd.Example = "  asd rename 01JQASDWSDECK0001 \"design review\""
 	return cmd
 }
 
 func restartCommand(opts Options) *cobra.Command {
 	var jsonOutput, yes, force bool
 	cmd := &cobra.Command{Use: "restart <session-id>", Short: "Start a new attempt for a session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if !yes {
-			return errors.New("restart requires --yes confirmation")
-		}
 		ctx := cmd.Context()
 		client, err := ownerClient(ctx, opts)
 		var foreground *owner.Runtime
@@ -332,12 +386,23 @@ func restartCommand(opts Options) *cobra.Command {
 			defer foreground.Close()
 			client = foreground.Client()
 		}
+		if force {
+			current, err := client.Get(ctx, app.GetRequest{Ref: args[0]})
+			if err != nil {
+				return err
+			}
+			if current.Session.Lifecycle.ProcessMayExist() && !yes {
+				if err := confirmAction(opts, args[0], "interrupt and restart"); err != nil {
+					return err
+				}
+			}
+		}
 		result, err := client.Restart(ctx, app.RestartRequest{Ref: args[0], Force: force})
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			if err := writeJSON(opts.Stdout, result); err != nil {
+			if err := writeJSON(opts.Stdout, restartDocumentOf(result)); err != nil {
 				return err
 			}
 		} else {
@@ -351,6 +416,7 @@ func restartCommand(opts Options) *cobra.Command {
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm restart")
 	cmd.Flags().BoolVar(&force, "force", false, "allow interrupting a live attempt")
+	cmd.Example = "  asd restart 01JQASDWSDECK0001 --yes\n  asd restart 01JQASDWSDECK0001 --force --yes"
 	return cmd
 }
 
@@ -377,12 +443,9 @@ func historicalRenameClient(ctx context.Context, opts Options, ref string) (app.
 }
 
 func stopCommand(opts Options) *cobra.Command {
-	var jsonOutput, yes bool
+	var jsonOutput bool
 	var grace time.Duration
 	cmd := &cobra.Command{Use: "stop <session-id>", Short: "Gracefully stop a session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if !yes {
-			return errors.New("stop requires --yes confirmation")
-		}
 		client, err := ownerClient(cmd.Context(), opts)
 		if err != nil {
 			return err
@@ -392,43 +455,62 @@ func stopCommand(opts Options) *cobra.Command {
 			return err
 		}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, stopDocumentOf(result))
 		}
 		if result.TimedOut {
-			return fmt.Errorf("stop timed out; session %s remains running; use kill --yes to escalate", result.Session.ID)
+			return session.NewError(session.CodeSessionIOFailed, string(result.Session.ID), "graceful stop timed out; the session remains running", "use kill --yes to escalate explicitly")
 		}
 		fmt.Fprintf(opts.Stdout, "stopped %s\n", result.Session.ID)
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
-	cmd.Flags().BoolVar(&yes, "yes", false, "confirm stop")
 	cmd.Flags().DurationVar(&grace, "grace", 0, "graceful stop window")
+	cmd.Example = "  asd stop 01JQASDWSDECK0001\n  asd stop 01JQASDWSDECK0001 --grace 10s"
 	return cmd
 }
 
 func killCommand(opts Options) *cobra.Command {
 	var jsonOutput, yes bool
 	cmd := &cobra.Command{Use: "kill <session-id>", Short: "Force-kill a session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if !yes {
-			return errors.New("kill requires --yes confirmation")
-		}
 		client, err := ownerClient(cmd.Context(), opts)
 		if err != nil {
 			return err
+		}
+		if !yes {
+			if err := confirmAction(opts, args[0], "kill"); err != nil {
+				return err
+			}
 		}
 		result, err := client.Kill(cmd.Context(), app.KillRequest{Ref: args[0], Signal: session.SignalKill})
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			return writeJSON(opts.Stdout, result)
+			return writeJSON(opts.Stdout, killDocumentOf(result))
 		}
 		fmt.Fprintf(opts.Stdout, "killed %s with %s\n", result.Session.ID, result.Signal)
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write stable JSON to stdout")
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm force kill")
+	cmd.Example = "  asd kill 01JQASDWSDECK0001\n  asd kill 01JQASDWSDECK0001 --yes"
 	return cmd
+}
+
+func confirmAction(opts Options, subject, action string) error {
+	if !hasTTY(opts) {
+		return session.NewError(session.CodeInvalidConfiguration, subject, action+" requires --yes when stdin is not a terminal", "rerun with --yes to confirm the destructive action")
+	}
+	fmt.Fprintf(opts.Stderr, "Confirm %s for %s? [y/N]: ", action, subject)
+	line, err := bufio.NewReader(opts.Stdin).ReadString('\n')
+	if err != nil && len(line) == 0 {
+		return err
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	if answer == "y" || answer == "yes" {
+		return nil
+	}
+	return session.NewError(session.CodeConflict, subject, action+" was not confirmed", "rerun the command when ready")
 }
 
 func readClient(ctx context.Context, opts Options) (app.Client, error) {
@@ -481,10 +563,31 @@ func attach(ctx context.Context, client app.Client, ref, holder string, opts Opt
 	}
 	defer term.Restore(opts.InputFD, terminalState)
 	defer opened.Terminal.Close()
+	if width, height, sizeErr := term.GetSize(opts.InputFD); sizeErr == nil {
+		_ = opened.Terminal.Resize(width, height)
+	}
+	resizeSignals := make(chan os.Signal, 1)
+	signal.Notify(resizeSignals, syscall.SIGWINCH)
+	defer signal.Stop(resizeSignals)
+	resizeCtx, stopResize := context.WithCancel(ctx)
+	defer stopResize()
+	go func() {
+		for {
+			select {
+			case <-resizeCtx.Done():
+				return
+			case <-resizeSignals:
+				width, height, sizeErr := term.GetSize(opts.InputFD)
+				if sizeErr == nil {
+					_ = opened.Terminal.Resize(width, height)
+				}
+			}
+		}
+	}()
 	outDone := make(chan error, 1)
 	inDone := make(chan error, 1)
 	go func() { _, err := io.Copy(opts.Stdout, opened.Terminal); outDone <- err }()
-	go func() { _, err := io.Copy(opened.Terminal, opts.Stdin); inDone <- err }()
+	go func() { inDone <- copyTerminalInput(opts.Stdin, opened.Terminal) }()
 	select {
 	case err := <-outDone:
 		_ = opened.Terminal.Close()
