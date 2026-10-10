@@ -31,6 +31,9 @@ type Client struct {
 // NewClient constructs a client for one state-scoped Unix socket.
 func NewClient(socketPath string) *Client { return &Client{path: socketPath} }
 
+// OwnerInstanceID returns the instance ID learned from the latest successful handshake.
+func (c *Client) OwnerInstanceID() string { c.mu.Lock(); defer c.mu.Unlock(); return c.instance }
+
 func (c *Client) rememberInstance(id string) error {
 	if id == "" {
 		return session.NewError(session.CodeOwnerUnavailable, "owner", "owner handshake omitted its instance ID", "restart the owner and retry")

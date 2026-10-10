@@ -63,6 +63,7 @@ type inspectDocument struct {
 	Session        sessionDocument   `json:"session"`
 	Stored         sessionDocument   `json:"stored"`
 	Persisted      bool              `json:"persisted"`
+	IOAvailability string            `json:"io_availability"`
 	WorkspacePath  string            `json:"workspace_path"`
 	Git            *gitDocument      `json:"git,omitempty"`
 	WorkspaceError string            `json:"workspace_error,omitempty"`
@@ -77,6 +78,9 @@ type mutationDocument struct {
 	PreviousGeneration *session.Generation `json:"previous_generation,omitempty"`
 	Stopped            *bool               `json:"stopped,omitempty"`
 	TimedOut           *bool               `json:"timed_out,omitempty"`
+	Code               session.Code        `json:"code,omitempty"`
+	Reason             string              `json:"reason,omitempty"`
+	Hint               string              `json:"hint,omitempty"`
 	Signal             session.SignalKind  `json:"signal,omitempty"`
 }
 
@@ -100,8 +104,22 @@ func listDocumentOf(result app.ListResult) listDocument {
 	return listDocument{Command: "list", Authority: result.Snapshot.Authority, ObservedAt: result.Snapshot.ObservedAt, Revision: result.Snapshot.Revision, Sessions: rows}
 }
 
-func inspectDocumentOf(ctx context.Context, result app.GetResult) inspectDocument {
-	out := inspectDocument{Command: "inspect", Authority: result.Session.Authority, ObservedAt: result.ObservedAt, Revision: result.Revision, Session: sessionDocumentOf(result.Session), Stored: sessionDocumentOf(result.Stored), Persisted: result.Persisted, WorkspacePath: string(result.Session.WorkspaceID)}
+func inspectDocumentOf(ctx context.Context, result app.GetResult, ownerID string) inspectDocument {
+	row := result.Session
+	ioStatus := "unknown"
+	if row.Authority == session.AuthorityLive {
+		switch {
+		case row.Lifecycle.Terminal() || row.Orphaned():
+			ioStatus = "unavailable"
+		case row.Attachment == session.AttachmentAttached:
+			ioStatus = "attached"
+		case row.HasIdentity && ownerID != "" && row.Identity.OwnerInstanceID == ownerID:
+			ioStatus = "available"
+		default:
+			ioStatus = "unavailable"
+		}
+	}
+	out := inspectDocument{Command: "inspect", Authority: row.Authority, ObservedAt: result.ObservedAt, Revision: result.Revision, Session: sessionDocumentOf(row), Stored: sessionDocumentOf(result.Stored), Persisted: result.Persisted, IOAvailability: ioStatus, WorkspacePath: string(row.WorkspaceID)}
 	home, _ := os.UserHomeDir()
 	gitClient := git.NewClient()
 	resolver := workspace.NewPathResolver(home, gitClient.Probe)
@@ -133,6 +151,11 @@ func stopDocumentOf(result app.StopResult) mutationDocument {
 	stopped, timedOut := result.Stopped, result.TimedOut
 	doc.Stopped = &stopped
 	doc.TimedOut = &timedOut
+	if result.TimedOut {
+		doc.Code = session.CodeSessionIOFailed
+		doc.Reason = "graceful stop timed out; the session remains running"
+		doc.Hint = "use kill --yes to escalate explicitly"
+	}
 	return doc
 }
 

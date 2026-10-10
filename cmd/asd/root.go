@@ -40,7 +40,11 @@ func reportError(args []string, command string, err error, stdout, stderr io.Wri
 	if wantsJSON(args) {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
-		_ = encoder.Encode(cli.ErrorDocumentOf(command, err))
+		if result, ok := cli.JSONResultOf(err); ok {
+			_ = encoder.Encode(result)
+		} else {
+			_ = encoder.Encode(cli.ErrorDocumentOf(command, err))
+		}
 	} else {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 	}

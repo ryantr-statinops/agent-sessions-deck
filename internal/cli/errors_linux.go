@@ -61,3 +61,21 @@ func ExitCode(err error) int {
 	}
 	return 1
 }
+
+// JSONResultError carries a command result alongside the error that determines the process exit code.
+type JSONResultError struct {
+	Document any
+	Cause    error
+}
+
+func (e *JSONResultError) Error() string { return e.Cause.Error() }
+func (e *JSONResultError) Unwrap() error { return e.Cause }
+
+// JSONResultOf returns a partial/result document when the command has one.
+func JSONResultOf(err error) (any, bool) {
+	var result *JSONResultError
+	if errors.As(err, &result) {
+		return result.Document, true
+	}
+	return nil, false
+}
