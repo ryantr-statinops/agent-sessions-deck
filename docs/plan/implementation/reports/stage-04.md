@@ -1,6 +1,6 @@
 # Stage 04 — Discovery, providers and workspaces
 
-Trạng thái: DONE (acceptance verified on isolated worktree; awaiting W1 integration into dev) · Milestone: M1 · Phụ thuộc: 02, 03.
+Trạng thái: DONE (acceptance verified and integrated into `dev`; Wave 1 close recorded in orchestration ledger) · Milestone: M1 · Phụ thuộc: 02, 03.
 
 ## Kết quả
 
@@ -36,8 +36,8 @@ Chạy trên Linux, offline (vendored), không ghi state thật:
 - **06–08:** `agent.Provider` implementations sẵn sàng đăng ký qua `agent.MapRegistry`; workspace resolution qua `workspace.PathResolver`; git metadata qua `git.Client.Probe` (`workspace.Git`); detection status contract trong `internal/discovery`. Provider real-smoke (vendor binary thật) deferred đến Stage 10 gate.
 - **Implementation commits:** `ded3dc7` discovery scan; `52e73ad` probes; `86efbb4` configured validation; `60efade` generic provider; `367bb34` gofmt; `e6bed20` workspace resolver; `c26d634` Git client/parser; `df2dcc8` Claude/Codex/OpenCode adapters; `98cc637` provider matrix. Stage 03 gate: `5e9c888` report, `3409ec5` status.
 - **Coordinator review commits:** `947b538` process PATH fallback; `38eda70` synchronized probe capture; `2fe4354` empty-output uncertainty; `e800659` registry collision coverage; `73a7a37` safe tilde expansion; `7e511d2` complete porcelain records; `806d1be` worktree error propagation; `c49b048` test spacing; `69152bc` built-in name collision; `fd5c98b` correct Git output-capture comment.
-- **Remaining limits:** `omp`/`orca`/`aider` lack verified adapters and remain deferred to Stage 10; vendor real-binary smoke is deferred to Stage 10; marker matching remains case-insensitive substring matching without version-range parsing; Git cache TTL is 5s; `git.Client.run` buffers full stdout/stderr without an output cap. `PathResolver` omits Git metadata when its optional probe fails; it does not carry probe errors in `Workspace`. Stage 04 is accepted on this branch; integration into `dev` is pending.
+- **Remaining limits:** `omp`/`orca`/`aider` lack verified adapters and remain deferred to Stage 10; vendor real-binary smoke is deferred to Stage 10; marker matching remains case-insensitive substring matching without version-range parsing; Git cache TTL is 5s; `git.Client.run` buffers full stdout/stderr without an output cap. `PathResolver` omits Git metadata when its optional probe fails; it does not carry probe errors in `Workspace`. Stage 04 is accepted and integrated into `dev`; its isolated branch tip is reachable from the integrated history.
 
 ## Review
 
-Coordinator acceptance complete on `work/w1-stage04-acceptance`; Stage 06 remains blocked until Stage 05 acceptance and W1 integration into `dev`.
+Coordinator acceptance completed on `work/w1-stage04-acceptance`; its tip commit is integrated into `dev`. Stage 06 completed its acceptance and Wave 1 is closed after Stage 03–06 gates passed.
