@@ -164,12 +164,16 @@ func inspectCommand(opts Options) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		report := inspectDocumentOf(cmd.Context(), result)
+		ownerID := ""
+		if ownerClient, ok := client.(interface{ OwnerInstanceID() string }); ok {
+			ownerID = ownerClient.OwnerInstanceID()
+		}
+		report := inspectDocumentOf(cmd.Context(), result, ownerID)
 		if jsonOutput {
 			return writeJSON(opts.Stdout, report)
 		}
 		row := result.Session
-		fmt.Fprintf(opts.Stdout, "id: %s\nname: %s\nagent: %s\nworkspace: %s\nauthority: %s\nobserved_at: %s\nrevision: %d\nlifecycle: %s\nattachment: %s\nactivity: %s\nattempt: %d\nidentity_verified: %t\npersisted: %t\n", row.ID, row.Name, row.AgentID, row.WorkspaceID, row.Authority, row.ObservedAt.Format(time.RFC3339), result.Revision, row.Lifecycle, row.Attachment, row.Activity, row.Generation, row.HasIdentity, result.Persisted)
+		fmt.Fprintf(opts.Stdout, "id: %s\nname: %s\nagent: %s\nworkspace: %s\nauthority: %s\nobserved_at: %s\nrevision: %d\nlifecycle: %s\nattachment: %s\nio_availability: %s\nactivity: %s\nattempt: %d\nidentity_verified: %t\npersisted: %t\n", row.ID, row.Name, row.AgentID, row.WorkspaceID, row.Authority, row.ObservedAt.Format(time.RFC3339), result.Revision, row.Lifecycle, row.Attachment, report.IOAvailability, row.Activity, row.Generation, row.HasIdentity, result.Persisted)
 		if !row.Command.IsZero() {
 			fmt.Fprintf(opts.Stdout, "command: %s %s\n", row.Command.Executable(), strings.Join(row.Command.Args(), " "))
 		}
@@ -454,11 +458,15 @@ func stopCommand(opts Options) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if result.TimedOut {
+			failure := session.NewError(session.CodeSessionIOFailed, string(result.Session.ID), "graceful stop timed out; the session remains running", "use kill --yes to escalate explicitly")
+			if jsonOutput {
+				return &JSONResultError{Document: stopDocumentOf(result), Cause: failure}
+			}
+			return failure
+		}
 		if jsonOutput {
 			return writeJSON(opts.Stdout, stopDocumentOf(result))
-		}
-		if result.TimedOut {
-			return session.NewError(session.CodeSessionIOFailed, string(result.Session.ID), "graceful stop timed out; the session remains running", "use kill --yes to escalate explicitly")
 		}
 		fmt.Fprintf(opts.Stdout, "stopped %s\n", result.Session.ID)
 		return nil
