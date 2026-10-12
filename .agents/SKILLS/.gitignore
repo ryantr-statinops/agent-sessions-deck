@@ -1,0 +1,43 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Test and coverage output
+.coverage
+coverage/
+htmlcov/
+
+# Temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# Local planning notes
+local.md
