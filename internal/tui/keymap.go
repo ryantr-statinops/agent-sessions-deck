@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -56,6 +57,11 @@ func (m Model) executeConfirm(action ConfirmAction) (tea.Model, tea.Cmd) {
 	switch action {
 	case ConfirmOwnerQuit:
 		return m, tea.Quit
+	case ConfirmRestartRunning, ConfirmGracefulStop, ConfirmForceKill:
+		sessionID := m.confirmState.SessionID
+		seq := m.NextSeq()
+		m.setStatus("Sending "+m.confirmState.Prompt+"...", false, 3*time.Second)
+		return m, m.executeActionCmd(action, sessionID, seq)
 	}
 	return m, nil
 }
@@ -157,6 +163,57 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "enter":
+		if sel, ok := m.SelectedSession(); ok {
+			return m, func() tea.Msg {
+				return SuspendForAttachMsg{SessionID: string(sel.ID)}
+			}
+		}
+		return m, nil
+	case "r":
+		if sel, ok := m.SelectedSession(); ok {
+			if sel.Lifecycle == "running" {
+				m.confirmState = ConfirmState{
+					Action:      ConfirmRestartRunning,
+					SessionID:   string(sel.ID),
+					SessionName: sel.Name,
+					Prompt:      fmt.Sprintf("Restart running session %s (%s)?", sel.Name, sel.ID),
+					Impact:      "The current attempt will be stopped and a new attempt will be launched.",
+				}
+				m.mode = ViewConfirm
+				return m, nil
+			}
+			seq := m.NextSeq()
+			m.setStatus("Restarting "+string(sel.ID)+"...", false, 3*time.Second)
+			return m, m.executeActionCmd(ConfirmRestartRunning, string(sel.ID), seq)
+		}
+		return m, nil
+	case "x", "s":
+		if sel, ok := m.SelectedSession(); ok {
+			m.confirmState = ConfirmState{
+				Action:      ConfirmGracefulStop,
+				SessionID:   string(sel.ID),
+				SessionName: sel.Name,
+				Prompt:      fmt.Sprintf("Gracefully stop session %s (%s)?", sel.Name, sel.ID),
+				Impact:      "Sends SIGTERM and waits up to grace period for graceful exit.",
+			}
+			m.mode = ViewConfirm
+			return m, nil
+		}
+		return m, nil
+	case "K":
+		if sel, ok := m.SelectedSession(); ok {
+			m.confirmState = ConfirmState{
+				Action:      ConfirmForceKill,
+				SessionID:   string(sel.ID),
+				SessionName: sel.Name,
+				Prompt:      fmt.Sprintf("Force kill session %s (%s)?", sel.Name, sel.ID),
+				Impact:      "Sends SIGKILL immediately to the verified owned process group.",
+			}
+			m.mode = ViewConfirm
+			return m, nil
+		}
+		return m, nil
 	case "q":
 		if m.isOwner && len(m.sessions) > 0 {
 			m.confirmState = ConfirmState{

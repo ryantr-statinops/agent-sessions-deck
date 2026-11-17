@@ -16,10 +16,6 @@ func (m Model) View() string {
 	}
 }
 
-func (m Model) renderConfirm() string {
-	return "CONFIRMATION\nPress Esc to cancel"
-}
-
 func (m Model) renderHelp() string {
 	return "HELP OVERLAY\nPress Esc or ? to return"
 }
