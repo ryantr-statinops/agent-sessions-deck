@@ -1,7 +1,5 @@
 package tui
 
-import "fmt"
-
 // View renders the TUI screen based on the active mode.
 func (m Model) View() string {
 	switch m.mode {
@@ -18,16 +16,12 @@ func (m Model) View() string {
 	}
 }
 
-func (m Model) renderDashboard() string {
-	return fmt.Sprintf("AGENT SESSION DECK - Mode: %s\nSessions: %d", m.mode, len(m.filteredSessions))
-}
-
 func (m Model) renderLauncher() string {
 	return "NEW SESSION LAUNCHER\nPress Esc to cancel"
 }
 
 func (m Model) renderConfirm() string {
-	return fmt.Sprintf("CONFIRMATION\n%s\n[y] Yes  [n] No", m.confirmState.Prompt)
+	return "CONFIRMATION\nPress Esc to cancel"
 }
 
 func (m Model) renderHelp() string {

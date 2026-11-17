@@ -31,6 +31,7 @@ type Model struct {
 	cursor        int
 	searchQuery   string
 	searchActive  bool
+	showDetail    bool
 	agentFilter   string
 	statusFilter  string
 	statusMessage string

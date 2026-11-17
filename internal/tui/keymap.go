@@ -115,6 +115,20 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.returnMode = m.mode
 		m.mode = ViewHelp
 		return m, nil
+	case "d":
+		m.showDetail = !m.showDetail
+		return m, nil
+	case "esc":
+		if m.showDetail {
+			m.showDetail = false
+			return m, nil
+		}
+		if m.searchQuery != "" {
+			m.searchQuery = ""
+			m.reapplyFilter()
+			return m, nil
+		}
+		return m, nil
 	case "/":
 		m.searchActive = true
 		return m, nil
