@@ -15,7 +15,3 @@ func (m Model) View() string {
 		return m.renderDashboard()
 	}
 }
-
-func (m Model) renderHelp() string {
-	return "HELP OVERLAY\nPress Esc or ? to return"
-}

@@ -259,6 +259,23 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 		return m, nil
+	case "pgup", "b":
+		pageSize := max(5, m.height-10)
+		m.cursor = max(0, m.cursor-pageSize)
+		return m, nil
+	case "pgdown", "f":
+		pageSize := max(5, m.height-10)
+		m.cursor = min(len(m.filteredSessions)-1, m.cursor+pageSize)
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+		return m, nil
+	case "home", "g":
+		m.cursor = 0
+		return m, nil
+	case "end", "G":
+		m.cursor = max(0, len(m.filteredSessions)-1)
+		return m, nil
 	case "ctrl+r":
 		seq := m.NextSeq()
 		m.setStatus("Refreshing...", false, 2*time.Second)
