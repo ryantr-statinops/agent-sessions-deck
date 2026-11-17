@@ -20,7 +20,7 @@ import (
 
 func TestRuntimeReportsSameGroupResidualAndLeavesDetachedDescendant(t *testing.T) {
 	for _, tc := range []struct{ name, script string }{
-		{name: "same-group", script: "sh -c 'trap \"\" TERM HUP; exec sleep 30' & echo $! > \"$1\"; exec sleep 30"},
+		{name: "same-group", script: "sh -c 'trap \"\" TERM HUP; echo $$ > \"$1\"; exec sleep 30' sh \"$1\" & exec sleep 30"},
 		{name: "detached-session", script: "setsid /bin/sh -c 'echo $$ > \"$1\"; exec sleep 30' sh \"$1\" & exec sleep 30"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -12,16 +12,7 @@ import (
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global exit shortcut
 	if msg.Type == tea.KeyCtrlC {
-		if m.isOwner && len(m.sessions) > 0 {
-			m.confirmState = ConfirmState{
-				Action:      ConfirmOwnerQuit,
-				ActiveCount: len(m.sessions),
-				Prompt:      "You are the foreground owner with active sessions. Stop all and quit, or Cancel?",
-			}
-			m.mode = ViewConfirm
-			return m, nil
-		}
-		return m, tea.Quit
+		return m.RequestQuit()
 	}
 
 	switch m.mode {
@@ -40,7 +31,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "y", "Y", "enter":
+	case "y", "Y", "s", "S", "enter":
 		action := m.confirmState.Action
 		m.mode = ViewDashboard
 		m.confirmState = ConfirmState{}
@@ -215,16 +206,7 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "q":
-		if m.isOwner && len(m.sessions) > 0 {
-			m.confirmState = ConfirmState{
-				Action:      ConfirmOwnerQuit,
-				ActiveCount: len(m.sessions),
-				Prompt:      "You are the foreground owner with active sessions. Stop all and quit, or Cancel?",
-			}
-			m.mode = ViewConfirm
-			return m, nil
-		}
-		return m, tea.Quit
+		return m.RequestQuit()
 	case "?":
 		m.returnMode = m.mode
 		m.mode = ViewHelp
