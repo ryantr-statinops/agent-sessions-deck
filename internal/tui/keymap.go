@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -68,11 +69,67 @@ func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleLauncherKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
+	switch msg.Type {
+	case tea.KeyEsc:
 		m.mode = ViewDashboard
+		m.launcherErr = ""
+		return m, nil
+
+	case tea.KeyTab:
+		m.launcherFocusedField = (m.launcherFocusedField + 1) % 3
+		return m, nil
+
+	case tea.KeyShiftTab:
+		m.launcherFocusedField = (m.launcherFocusedField + 2) % 3
+		return m, nil
+
+	case tea.KeyEnter:
+		if strings.TrimSpace(m.launcherWorkspace) == "" {
+			m.launcherErr = "Workspace directory cannot be empty"
+			return m, nil
+		}
+		m.launcherErr = ""
+		seq := m.NextSeq()
+		return m, m.launchSessionCmd(seq)
+
+	case tea.KeyBackspace:
+		if m.launcherFocusedField == 1 && len(m.launcherWorkspace) > 0 {
+			m.launcherWorkspace = m.launcherWorkspace[:len(m.launcherWorkspace)-1]
+		} else if m.launcherFocusedField == 2 && len(m.launcherName) > 0 {
+			m.launcherName = m.launcherName[:len(m.launcherName)-1]
+		}
+		return m, nil
+
+	case tea.KeyUp:
+		if m.launcherFocusedField == 0 {
+			if m.launcherSelectedAgent > 0 {
+				m.launcherSelectedAgent--
+			}
+		} else {
+			m.launcherFocusedField = (m.launcherFocusedField + 2) % 3
+		}
+		return m, nil
+
+	case tea.KeyDown:
+		if m.launcherFocusedField == 0 {
+			if m.launcherSelectedAgent < len(m.agents)-1 {
+				m.launcherSelectedAgent++
+			}
+		} else {
+			m.launcherFocusedField = (m.launcherFocusedField + 1) % 3
+		}
+		return m, nil
+
+	default:
+		if msg.Runes != nil {
+			if m.launcherFocusedField == 1 {
+				m.launcherWorkspace += string(msg.Runes)
+			} else if m.launcherFocusedField == 2 {
+				m.launcherName += string(msg.Runes)
+			}
+		}
 		return m, nil
 	}
-	return m, nil
 }
 
 func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

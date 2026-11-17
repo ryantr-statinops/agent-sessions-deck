@@ -16,10 +16,6 @@ func (m Model) View() string {
 	}
 }
 
-func (m Model) renderLauncher() string {
-	return "NEW SESSION LAUNCHER\nPress Esc to cancel"
-}
-
 func (m Model) renderConfirm() string {
 	return "CONFIRMATION\nPress Esc to cancel"
 }
