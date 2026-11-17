@@ -41,6 +41,7 @@ type Model struct {
 
 	// Modals & sub-views
 	confirmState ConfirmState
+	attachTarget string
 
 	// Form inputs (Launcher)
 	launcherSelectedAgent int
@@ -217,6 +218,11 @@ func (m *Model) reapplyFilter() {
 	if m.cursor >= len(m.filteredSessions) {
 		m.cursor = max(0, len(m.filteredSessions)-1)
 	}
+}
+
+// AttachTarget returns the session ID to attach into when TUI suspends, if any.
+func (m Model) AttachTarget() string {
+	return m.attachTarget
 }
 
 // SelectedSession returns the currently selected SessionSnapshot, if any.

@@ -47,6 +47,9 @@ func NewRoot(opts Options) *cobra.Command {
 	root.SetOut(opts.Stdout)
 	root.SetErr(opts.Stderr)
 	root.RunE = func(cmd *cobra.Command, _ []string) error {
+		if hasTTY(opts) {
+			return runTUI(cmd.Context(), opts)
+		}
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		runtime, err := owner.Start(ctx, opts.Paths, opts.Config)

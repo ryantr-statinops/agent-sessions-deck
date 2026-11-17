@@ -156,9 +156,8 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		if sel, ok := m.SelectedSession(); ok {
-			return m, func() tea.Msg {
-				return SuspendForAttachMsg{SessionID: string(sel.ID)}
-			}
+			m.attachTarget = string(sel.ID)
+			return m, tea.Quit
 		}
 		return m, nil
 	case "r":
