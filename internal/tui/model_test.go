@@ -168,3 +168,32 @@ func TestModelKeyNavigation(t *testing.T) {
 		t.Fatalf("expected mode ViewHelp after '?', got %v", mUp5.mode)
 	}
 }
+
+type mockTerminalSub struct {
+	app.TerminalSubscription
+	frame app.TerminalFrame
+	err   error
+}
+
+func (m *mockTerminalSub) ReadFrame() (app.TerminalFrame, error) {
+	return m.frame, m.err
+}
+
+func TestWaitForFrameCmd(t *testing.T) {
+	sub := &mockTerminalSub{
+		frame: app.TerminalFrame{Sequence: 42},
+	}
+	cmd := waitForFrameCmd(sub, "sess-1")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+
+	msg := cmd()
+	frameMsg, ok := msg.(TerminalFrameMsg)
+	if !ok {
+		t.Fatalf("expected TerminalFrameMsg, got %T", msg)
+	}
+	if frameMsg.SessionID != "sess-1" || frameMsg.Frame.Sequence != 42 {
+		t.Fatalf("unexpected frameMsg: %+v", frameMsg)
+	}
+}

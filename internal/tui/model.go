@@ -210,11 +210,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case TerminalFrameMsg:
+		if msg.SessionID != m.activeSessionID || m.mode != ViewTerminal {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.terminalExitErr = msg.Err
+			m.terminalExited = true
+			return m, nil
+		}
+		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
+
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 	}
 
 	return m, nil
+}
+
+// waitForFrameCmd listens asynchronously for terminal frames from an active subscription.
+func waitForFrameCmd(sub app.TerminalSubscription, sessionID string) tea.Cmd {
+	if sub == nil || sessionID == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		frame, err := sub.ReadFrame()
+		return TerminalFrameMsg{
+			SessionID: sessionID,
+			Frame:     frame,
+			Err:       err,
+		}
+	}
 }
 
 // setStatus sets a temporary status bar message with auto-expiry.
