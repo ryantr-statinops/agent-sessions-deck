@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
@@ -122,5 +123,81 @@ func TestHelpOverlayRenderingAndToggle(t *testing.T) {
 	mUp2 := up2.(Model)
 	if mUp2.mode != ViewDashboard {
 		t.Fatalf("expected return to ViewDashboard after second '?', got %v", mUp2.mode)
+	}
+}
+
+type mockSubWithIO struct {
+	app.TerminalSubscription
+	writes     [][]byte
+	closeCount int
+}
+
+func (m *mockSubWithIO) Write(p []byte) (int, error) {
+	cp := make([]byte, len(p))
+	copy(cp, p)
+	m.writes = append(m.writes, cp)
+	return len(p), nil
+}
+
+func (m *mockSubWithIO) Close() error {
+	m.closeCount++
+	return nil
+}
+
+func (m *mockSubWithIO) InitialSnapshot() app.TerminalSnapshot {
+	return app.TerminalSnapshot{}
+}
+
+func (m *mockSubWithIO) ReadFrame() (app.TerminalFrame, error) {
+	return app.TerminalFrame{}, nil
+}
+
+func TestTerminalKeymapPrefixDetach(t *testing.T) {
+	sub := &mockSubWithIO{}
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "sess-detach"
+	m.activeSub = sub
+
+	// 1. Send Ctrl+]
+	up1, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlCloseBracket})
+	m1 := up1.(Model)
+	if !m1.terminalPrefix.IsPending() {
+		t.Fatal("expected terminalPrefix to be pending after Ctrl+]")
+	}
+
+	// 2. Send 's'
+	up2, _ := m1.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m2 := up2.(Model)
+	if m2.mode != ViewDashboard {
+		t.Fatalf("expected mode ViewDashboard after 's', got %v", m2.mode)
+	}
+	if sub.closeCount != 1 {
+		t.Fatalf("expected sub.Close() to be called once, got %d", sub.closeCount)
+	}
+	if m2.activeSessionID != "" {
+		t.Fatalf("expected activeSessionID to be cleared, got %q", m2.activeSessionID)
+	}
+}
+
+func TestTerminalKeymapCtrlCForwardsToPTY(t *testing.T) {
+	sub := &mockSubWithIO{}
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "sess-isig"
+	m.activeSub = sub
+
+	// Send Ctrl+C
+	up, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	mUp := up.(Model)
+
+	if mUp.mode != ViewTerminal {
+		t.Fatalf("expected mode ViewTerminal to remain active, got %v", mUp.mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected nil command (not tea.Quit)")
+	}
+	if len(sub.writes) != 1 || len(sub.writes[0]) != 1 || sub.writes[0][0] != 0x03 {
+		t.Fatalf("expected 0x03 written to PTY, got %+v", sub.writes)
 	}
 }
