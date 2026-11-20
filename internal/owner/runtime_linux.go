@@ -54,6 +54,10 @@ func Start(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime
 		_ = claim.Close()
 		return nil, err
 	}
+	if _, err := service.ReconcileStartup(ctx); err != nil {
+		_ = claim.Close()
+		return nil, err
+	}
 	server, err := ipc.NewServer(claim, service)
 	if err != nil {
 		_ = claim.Close()

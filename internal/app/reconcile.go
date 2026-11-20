@@ -48,12 +48,9 @@ func (s *Service) ReconcileStartup(ctx context.Context) (ReconciliationSummary, 
 			}
 		}
 
-		// If the attempt had an attached PTY from the previous owner instance,
-		// that PTY is definitely lost across owner reboot.
-		kind := ReportReconciled
-		if curr.Attachment == session.AttachmentAttached {
-			kind = ReportPTYLost
-		}
+		// On owner startup, any surviving process from a previous owner has lost its PTY.
+		// Reporting PTYLost classifies it as dead, stale, orphaned, or unknown.
+		kind := ReportPTYLost
 
 		repReq := ReportRequest{
 			Ref:      string(sess.ID),
