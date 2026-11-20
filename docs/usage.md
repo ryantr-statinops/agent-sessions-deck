@@ -51,9 +51,30 @@ Press `n` from the dashboard to open the launcher form:
 - Press `Enter` to validate and launch the session.
 - Press `Esc` to cancel and return to the dashboard.
 
-### 2.4 Keyboard Shortcuts Cheatsheet
+### 2.4 Interactive Virtual Terminal (`ViewTerminal`)
 
-Press `?` from anywhere to open the full keyboard reference overlay. Press `Esc` or `?` to close it.
+Press `Enter` on any live session to enter the embedded interactive terminal:
+- Full VT terminal emulator supporting colors, cursor navigation, and full-screen programs (Vim, Less, Claude Code).
+- `Ctrl+C` passes directly through to the child PTY (does not exit the TUI).
+- **Prefix Escape Sequences (`Ctrl+]` or `0x1D`)**:
+  - `Ctrl+] s`: Detach from interactive session, release lease, and return to the dashboard.
+  - `Ctrl+] n`: Switch immediately to the new session launcher.
+  - `Ctrl+] [`: Enter scrollback history mode.
+  - `Ctrl+] ?`: Display terminal contextual help overlay.
+  - `Ctrl+] Ctrl+]`: Send a literal `0x1D` byte to the child process.
+
+### 2.5 Scrollback History Navigation
+
+When in terminal scrollback mode (`Ctrl+] [`):
+- `↑` / `k`: Scroll up one line.
+- `↓` / `j`: Scroll down one line.
+- `PgUp` / `b`: Scroll up one page.
+- `PgDn` / `f`: Scroll down one page.
+- `Esc` or `Enter`: Return to live terminal streaming at current position.
+
+### 2.6 Keyboard Shortcuts Cheatsheet
+
+Press `?` from the dashboard or `Ctrl+] ?` from a terminal to open the shortcut cheatsheet.
 
 ---
 
@@ -64,7 +85,7 @@ Press `?` from anywhere to open the full keyboard reference overlay. Press `Esc`
 | `↑` / `k`, `↓` / `j` | Dashboard | Move cursor up / down |
 | `PgUp` / `b`, `PgDn` / `f` | Dashboard | Scroll one page up / down |
 | `Home` / `g`, `End` / `G` | Dashboard | Jump to first / last session |
-| `Enter` | Dashboard | Attach to the selected live session (PTY raw stream) |
+| `Enter` | Dashboard | Attach to the selected live session (embedded VT stream) |
 | `n` | Dashboard | Open New Session launcher form |
 | `/` | Dashboard | Activate multi-field fuzzy search bar |
 | `d` | Dashboard | Toggle session inspector detail pane |
@@ -74,4 +95,8 @@ Press `?` from anywhere to open the full keyboard reference overlay. Press `Esc`
 | `Ctrl+R` | Dashboard | Force refresh session list from server |
 | `?` | Global | Toggle keyboard shortcuts cheatsheet overlay |
 | `q` / `Ctrl+C` | Global | Quit TUI (detaches client, confirms with owner) |
-| `Ctrl+]` | Terminal Attach | Detach from active session and return to TUI |
+| `Ctrl+] s` | Terminal | Detach from active session and return to dashboard |
+| `Ctrl+] n` | Terminal | Detach and open launcher form |
+| `Ctrl+] [` | Terminal | Enter scrollback buffer navigation |
+| `Ctrl+] ?` | Terminal | Toggle terminal help overlay |
+| `Ctrl+] Ctrl+]` | Terminal | Send literal `0x1D` (Ctrl+]) to child process |
