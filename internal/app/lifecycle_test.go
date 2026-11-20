@@ -127,6 +127,31 @@ func TestOpenReportsUnavailableIOWhenTheStreamCannotBeHandedOut(t *testing.T) {
 	}
 }
 
+func TestOpenRollsBackOnContextCancellationBeforeCommit(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	id := string(created.Session.ID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := h.svc.Open(ctx, OpenRequest{Ref: id, Holder: "cli"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Open err = %v, want context.Canceled", err)
+	}
+
+	live, err := h.svc.Get(context.Background(), GetRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if live.Session.Attachment != session.AttachmentDetached {
+		t.Fatalf("attachment = %s, want detached after rollback", live.Session.Attachment)
+	}
+	if holder, held := h.broker.holder(created.Session.ID); held {
+		t.Fatalf("lease is still held by %s after rollback", holder)
+	}
+}
+
 func TestDetachReleasesTheLeaseAndChangesOnlyTheAttachment(t *testing.T) {
 	h := newHarness(t)
 	created := h.createRunning(t)

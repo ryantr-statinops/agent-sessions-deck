@@ -123,7 +123,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (CreateResult, 
 
 	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
-		return CreateResult{}, s.cleanupAfterPersistFailure(ctx, id, launchReq.Generation, identity, err)
+		return CreateResult{}, s.cleanupAfterPersistFailure(context.Background(), id, launchReq.Generation, identity, err)
 	}
 	defer releaseCommit()
 
@@ -213,7 +213,7 @@ func (s *Service) cleanupAfterPersistFailure(ctx context.Context, id session.ID,
 				"find the process by its executable and workspace, then end it by hand; ASD refuses to signal an unverified pid", cause).
 				ForAttempt(generation)
 		}
-		cleanup, cleanupErr := s.runtime.ForceKill(ctx, effect.Identity, s.grace)
+		cleanup, cleanupErr := s.runtime.ForceKill(context.Background(), effect.Identity, s.grace)
 		if cleanupErr != nil {
 			return session.WrapError(code, string(id),
 				"the session was launched, its metadata could not be persisted, and its child could not be cleaned up: "+cleanupErr.Error(),

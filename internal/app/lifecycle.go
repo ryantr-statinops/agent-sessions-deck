@@ -92,9 +92,16 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (OpenResult, error)
 		s.rememberLease(current.ID, current.Generation, heldLease{lease: lease, subscription: subscription})
 	}
 
+	if err := ctx.Err(); err != nil {
+		if rollbackErr := s.rollbackOpen(context.Background(), current, lease, subscription); rollbackErr != nil {
+			return OpenResult{}, rollbackErr
+		}
+		return OpenResult{}, err
+	}
+
 	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
-		if rollbackErr := s.rollbackOpen(ctx, current, lease, subscription); rollbackErr != nil {
+		if rollbackErr := s.rollbackOpen(context.Background(), current, lease, subscription); rollbackErr != nil {
 			return OpenResult{}, rollbackErr
 		}
 		return OpenResult{}, err
@@ -138,7 +145,7 @@ func (s *Service) rollbackOpen(ctx context.Context, current session.Session, lea
 			failures = append(failures, fmt.Errorf("close the terminal stream: %w", err))
 		}
 	}
-	if err := s.leases.Release(ctx, lease); err != nil {
+	if err := s.leases.Release(context.Background(), lease); err != nil {
 		failures = append(failures, fmt.Errorf("release the interactive lease: %w", err))
 	}
 	if len(failures) > 0 {
@@ -657,7 +664,7 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 
 	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
-		return RestartResult{}, s.cleanupAfterPersistFailure(ctx, current.ID, launchReq.Generation, identity, err)
+		return RestartResult{}, s.cleanupAfterPersistFailure(context.Background(), current.ID, launchReq.Generation, identity, err)
 	}
 	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
