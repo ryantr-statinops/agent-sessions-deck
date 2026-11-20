@@ -197,3 +197,51 @@ func TestWaitForFrameCmd(t *testing.T) {
 		t.Fatalf("unexpected frameMsg: %+v", frameMsg)
 	}
 }
+
+func TestApplyTerminalFrame(t *testing.T) {
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "test-sess"
+
+	// 1. Snapshot application
+	snapshot := &app.TerminalSnapshot{
+		Sequence: 1,
+		Screen: app.TerminalScreen{
+			Columns: 10,
+			Rows:    2,
+			Lines: []app.TerminalLine{
+				{Index: 0, Cells: []app.TerminalCell{{Text: "Hello"}}},
+				{Index: 1, Cells: []app.TerminalCell{{Text: "World"}}},
+			},
+			Cursor: app.TerminalCursor{X: 5, Y: 0, Visible: true},
+		},
+	}
+	m.applyTerminalFrame(app.TerminalFrame{Snapshot: snapshot})
+	if m.terminalScreen.Columns != 10 || len(m.terminalScreen.Lines) != 2 {
+		t.Fatalf("expected 2 lines of 10 cols, got %+v", m.terminalScreen)
+	}
+	if m.terminalScreen.Lines[0].Cells[0].Text != "Hello" {
+		t.Fatalf("expected 'Hello', got %q", m.terminalScreen.Lines[0].Cells[0].Text)
+	}
+
+	// 2. Incremental Delta application
+	delta := &app.TerminalDelta{
+		BaseSequence: 1,
+		Columns:      10,
+		Rows:         2,
+		Lines: []app.TerminalLine{
+			{Index: 1, Cells: []app.TerminalCell{{Text: "Updated"}}},
+		},
+		Cursor: app.TerminalCursor{X: 7, Y: 1, Visible: true},
+	}
+	m.applyTerminalFrame(app.TerminalFrame{Delta: delta})
+	if m.terminalScreen.Lines[0].Cells[0].Text != "Hello" {
+		t.Fatalf("line 0 should remain 'Hello', got %q", m.terminalScreen.Lines[0].Cells[0].Text)
+	}
+	if m.terminalScreen.Lines[1].Cells[0].Text != "Updated" {
+		t.Fatalf("line 1 should be 'Updated', got %q", m.terminalScreen.Lines[1].Cells[0].Text)
+	}
+	if m.terminalScreen.Cursor.X != 7 || m.terminalScreen.Cursor.Y != 1 {
+		t.Fatalf("expected cursor at (7,1), got (%d,%d)", m.terminalScreen.Cursor.X, m.terminalScreen.Cursor.Y)
+	}
+}

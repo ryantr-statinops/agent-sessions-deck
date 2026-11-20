@@ -219,6 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.terminalExited = true
 			return m, nil
 		}
+		m.applyTerminalFrame(msg.Frame)
 		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
 
 	case tea.KeyMsg:
@@ -239,6 +240,44 @@ func waitForFrameCmd(sub app.TerminalSubscription, sessionID string) tea.Cmd {
 			SessionID: sessionID,
 			Frame:     frame,
 			Err:       err,
+		}
+	}
+}
+
+// applyTerminalFrame merges incoming terminal frames into the active screen model.
+func (m *Model) applyTerminalFrame(frame app.TerminalFrame) {
+	if frame.Snapshot != nil {
+		m.terminalScreen = frame.Snapshot.Screen
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(frame.Snapshot.Screen.AlternateScreen)
+		}
+		return
+	}
+
+	if frame.Delta != nil {
+		delta := frame.Delta
+		m.terminalScreen.Columns = delta.Columns
+		m.terminalScreen.Rows = delta.Rows
+		m.terminalScreen.Cursor = delta.Cursor
+		m.terminalScreen.AlternateScreen = delta.AlternateScreen
+		m.terminalScreen.ScrollbackLines = delta.ScrollbackLines
+
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(delta.AlternateScreen)
+		}
+
+		if len(m.terminalScreen.Lines) < delta.Rows {
+			newLines := make([]app.TerminalLine, delta.Rows)
+			copy(newLines, m.terminalScreen.Lines)
+			m.terminalScreen.Lines = newLines
+		} else if len(m.terminalScreen.Lines) > delta.Rows && delta.Rows > 0 {
+			m.terminalScreen.Lines = m.terminalScreen.Lines[:delta.Rows]
+		}
+
+		for _, line := range delta.Lines {
+			if line.Index >= 0 && line.Index < len(m.terminalScreen.Lines) {
+				m.terminalScreen.Lines[line.Index] = line
+			}
 		}
 	}
 }
