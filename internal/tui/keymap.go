@@ -45,19 +45,21 @@ func (m Model) handleTerminalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				_ = m.activeSub.Close()
 				m.activeSub = nil
 			}
+			sessID := m.activeSessionID
 			m.activeSessionID = ""
 			m.mode = ViewDashboard
 			seq := m.NextSeq()
-			return m, m.loadSessionsCmd(seq)
+			return m, tea.Batch(m.detachSessionCmd(sessID), m.loadSessionsCmd(seq))
 
 		case termview.ActionNew:
 			if m.activeSub != nil {
 				_ = m.activeSub.Close()
 				m.activeSub = nil
 			}
+			sessID := m.activeSessionID
 			m.activeSessionID = ""
 			m.mode = ViewLauncher
-			return m, nil
+			return m, m.detachSessionCmd(sessID)
 
 		case termview.ActionHelp:
 			m.returnMode = ViewTerminal

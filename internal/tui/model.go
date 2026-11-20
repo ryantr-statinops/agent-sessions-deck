@@ -155,6 +155,20 @@ func (m Model) openSessionCmd(sessionID string) tea.Cmd {
 	}
 }
 
+// detachSessionCmd asynchronously asks the client to detach and release the lease.
+func (m Model) detachSessionCmd(sessionID string) tea.Cmd {
+	if m.client == nil || sessionID == "" {
+		return nil
+	}
+	client := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_, _ = client.Detach(ctx, app.DetachRequest{Ref: sessionID})
+		return nil
+	}
+}
+
 // Update handles incoming messages and events.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
