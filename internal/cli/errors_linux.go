@@ -24,7 +24,7 @@ type ErrorDocument struct {
 func ErrorDocumentOf(command string, err error) ErrorDocument {
 	var typed *session.Error
 	if errors.As(err, &typed) {
-		return ErrorDocument{Command: command, Code: typed.Code, Subject: typed.Subject, Reason: typed.Reason, Hint: typed.Hint, Attempt: typed.Attempt, HasAttempt: typed.HasAttempt}
+		return ErrorDocument{Command: command, Code: typed.Code, Subject: session.Sanitize(typed.Subject), Reason: session.Sanitize(typed.Reason), Hint: session.Sanitize(typed.Hint), Attempt: typed.Attempt, HasAttempt: typed.HasAttempt}
 	}
 	code := session.CodeUnknown
 	hint := "inspect the command help and retry when the cause is resolved"
@@ -32,7 +32,7 @@ func ErrorDocumentOf(command string, err error) ErrorDocument {
 		code = session.CodeInvalidConfiguration
 		hint = "check the command arguments and run asd --help"
 	}
-	return ErrorDocument{Command: command, Code: code, Reason: err.Error(), Hint: hint}
+	return ErrorDocument{Command: command, Code: code, Reason: session.Sanitize(err.Error()), Hint: hint}
 }
 
 // ExitCode maps contract errors to the V1 process status values.
