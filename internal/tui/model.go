@@ -9,6 +9,7 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
+	termview "github.com/ryantr-statinops/agent-sessions-deck/internal/tui/terminal"
 )
 
 // Model is the top-level Bubble Tea model orchestrating the TUI views.
@@ -53,6 +54,15 @@ type Model struct {
 	// Window dimensions
 	width  int
 	height int
+
+	// Terminal view state
+	activeSessionID string
+	activeSub       app.TerminalSubscription
+	terminalScreen  app.TerminalScreen
+	terminalPrefix  *termview.PrefixMachine
+	terminalScroll  *termview.ScrollController
+	terminalExited  bool
+	terminalExitErr error
 }
 
 // NewModel instantiates a Model configured with application client and environment options.
@@ -65,6 +75,8 @@ func NewModel(opts Options) Model {
 		mode:             ViewDashboard,
 		recentWorkspaces: opts.RecentWorkspaces,
 		agents:           opts.InitialAgents,
+		terminalPrefix:   termview.NewPrefixMachine(),
+		terminalScroll:   termview.NewScrollController(nil),
 		width:            80,
 		height:           24,
 	}

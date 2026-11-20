@@ -48,6 +48,12 @@ func TestModelInitialization(t *testing.T) {
 	if m.launcherWorkspace != "/workspace/test" {
 		t.Fatalf("expected launcherWorkspace '/workspace/test', got %q", m.launcherWorkspace)
 	}
+	if m.terminalPrefix == nil || m.terminalScroll == nil {
+		t.Fatal("expected terminalPrefix and terminalScroll to be initialized")
+	}
+	if ViewTerminal.String() != "Terminal" {
+		t.Fatalf("expected ViewTerminal.String() == 'Terminal', got %q", ViewTerminal.String())
+	}
 
 	cmd := m.Init()
 	if cmd == nil {
