@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,6 +83,28 @@ func TestOpenReportsUnavailableIOAndLeavesTheProcessUntouched(t *testing.T) {
 	}
 	if live.Session.Lifecycle != session.LifecycleRunning || !live.Session.Orphaned() {
 		t.Fatalf("the refused open changed the session: %+v", live.Session)
+	}
+}
+
+func TestOpenOrphanRefusedWithIOFailed(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	if _, err := h.svc.Report(context.Background(), ReportRequest{
+		Ref:  string(created.Session.ID),
+		Kind: ReportPTYLost,
+		Liveness: session.LivenessObservation{
+			Outcome:  session.ProbeAlive,
+			Identity: testIdentity(4242),
+			At:       baseTime,
+		},
+	}); err != nil {
+		t.Fatalf("Report pty-lost: %v", err)
+	}
+
+	_, err := h.svc.Open(context.Background(), OpenRequest{Ref: string(created.Session.ID), Holder: "cli-test"})
+	typed := requireCode(t, err, session.CodeSessionIOFailed)
+	if !strings.Contains(typed.Hint, "inspect, stop, kill, or restart") {
+		t.Fatalf("expected clear orphan guidance hint, got %q", typed.Hint)
 	}
 }
 

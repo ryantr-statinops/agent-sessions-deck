@@ -38,6 +38,11 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (OpenResult, error)
 	if err != nil {
 		return OpenResult{}, err
 	}
+	if current.Orphaned() {
+		return OpenResult{}, session.NewError(session.CodeSessionIOFailed, string(current.ID),
+			fmt.Sprintf("no PTY handle for attempt %d: the process survived an owner crash but lost its controlling terminal", current.Generation),
+			"inspect, stop, kill, or restart the session; asd cannot reattach a lost PTY without a daemon")
+	}
 	now := s.now()
 	attachEvent := session.Event{
 		Kind:       session.EventAttached,
