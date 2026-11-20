@@ -6,8 +6,8 @@ import (
 
 func TestViewportDimensions(t *testing.T) {
 	tests := []struct {
-		winW, winH     int
-		wantW, wantH   int
+		winW, winH   int
+		wantW, wantH int
 	}{
 		{80, 24, 80, 23},
 		{120, 40, 120, 39},
