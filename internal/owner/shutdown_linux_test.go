@@ -4,6 +4,7 @@ package owner
 
 import (
 	"context"
+	"syscall"
 	"testing"
 	"time"
 
@@ -84,5 +85,81 @@ func TestOwnerGracefulShutdown(t *testing.T) {
 	s2, _ := off.Get(ctx, app.GetRequest{Ref: string(res2.Session.ID)})
 	if s2.Session.Lifecycle != session.LifecycleExited {
 		t.Fatalf("session 2 lifecycle = %v, want Exited", s2.Session.Lifecycle)
+	}
+}
+
+func TestUncooperativeChildReportedWithoutSilentKill(t *testing.T) {
+	paths := config.Paths{
+		StateDir:   t.TempDir(),
+		ConfigDir:  t.TempDir(),
+		RuntimeDir: t.TempDir(),
+	}
+	cfg := config.Default()
+	cfg.Agents = []config.Agent{
+		{
+			ID:         "sh",
+			Name:       "Shell",
+			Executable: "/bin/sh",
+		},
+	}
+
+	ctx := context.Background()
+	rt, err := Start(ctx, paths, cfg)
+	if err != nil {
+		t.Fatalf("Start runtime: %v", err)
+	}
+
+	ws := t.TempDir()
+	// Process traps and ignores SIGTERM
+	created, err := rt.Client().Create(ctx, app.CreateRequest{
+		Agent:         "sh",
+		WorkspacePath: ws,
+		Name:          "uncoop-test",
+		ExtraArgs:     []string{"-c", "trap '' TERM; sleep 30"},
+	})
+	if err != nil {
+		_ = rt.Close()
+		t.Fatalf("Create uncooperative sess: %v", err)
+	}
+
+	pid := created.Session.Identity.PID
+	defer func() {
+		if pid > 0 {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}()
+
+	// Graceful shutdown with short 200ms grace
+	report, err := rt.Shutdown(ctx, 200*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	if report.TotalSessions != 1 {
+		t.Fatalf("expected 1 session, got %d", report.TotalSessions)
+	}
+	if report.StoppedSessions != 0 {
+		t.Fatalf("expected 0 stopped sessions, got %d", report.StoppedSessions)
+	}
+	if len(report.ResidualPIDs) != 1 || report.ResidualPIDs[0] != pid {
+		t.Fatalf("expected residual PID %d, got %v", pid, report.ResidualPIDs)
+	}
+
+	// Verify the process was NOT silently killed and is still alive in kernel
+	if err := syscall.Kill(pid, 0); err != nil {
+		t.Fatalf("expected process %d to still be alive (no silent SIGKILL), but signal 0 failed: %v", pid, err)
+	}
+
+	// Stored row must remain truthful (not marked Exited)
+	off, err := Offline(ctx, paths, cfg)
+	if err != nil {
+		t.Fatalf("Offline service: %v", err)
+	}
+	s, err := off.Get(ctx, app.GetRequest{Ref: string(created.Session.ID)})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if s.Session.Lifecycle == session.LifecycleExited {
+		t.Fatalf("uncooperative session should not be marked Exited in store")
 	}
 }
