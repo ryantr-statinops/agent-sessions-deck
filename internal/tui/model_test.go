@@ -245,3 +245,36 @@ func TestApplyTerminalFrame(t *testing.T) {
 		t.Fatalf("expected cursor at (7,1), got (%d,%d)", m.terminalScreen.Cursor.X, m.terminalScreen.Cursor.Y)
 	}
 }
+
+func TestTerminalStreamTerminationFreezesFinalScreen(t *testing.T) {
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "active-1"
+	m.terminalScreen = app.TerminalScreen{
+		Columns: 10,
+		Rows:    1,
+		Lines: []app.TerminalLine{
+			{Index: 0, Cells: []app.TerminalCell{{Text: "Final Output"}}},
+		},
+	}
+
+	// Deliver EOF
+	updated, cmd := m.Update(TerminalFrameMsg{
+		SessionID: "active-1",
+		Err:       errors.New("EOF"),
+	})
+
+	mFinal := updated.(Model)
+	if !mFinal.terminalExited {
+		t.Fatal("expected terminalExited to be true")
+	}
+	if mFinal.terminalExitErr == nil {
+		t.Fatal("expected non-nil terminalExitErr")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil command after EOF (stream finished)")
+	}
+	if len(mFinal.terminalScreen.Lines) != 1 || mFinal.terminalScreen.Lines[0].Cells[0].Text != "Final Output" {
+		t.Fatalf("expected final screen content to be preserved, got %+v", mFinal.terminalScreen)
+	}
+}
