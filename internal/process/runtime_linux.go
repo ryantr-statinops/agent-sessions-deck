@@ -237,7 +237,7 @@ func (r *Runtime) Observe(ctx context.Context, recorded domain.ProcessIdentity) 
 	if err := ctx.Err(); err != nil {
 		return domain.LivenessObservation{}, err
 	}
-	if _, err := r.entryFor(recorded); err != nil {
+	if err := recorded.Validate(); err != nil {
 		return domain.LivenessObservation{}, err
 	}
 	return Observe(recorded), nil

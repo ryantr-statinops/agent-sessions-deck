@@ -313,6 +313,7 @@ type scriptedRuntime struct {
 	waits      []session.ExitWait
 	waitStatus session.ExitStatus
 	waitErr    error
+	observeFn  func(session.ProcessIdentity) (session.LivenessObservation, error)
 }
 
 func newScriptedRuntime(identity session.ProcessIdentity) *scriptedRuntime {
@@ -341,7 +342,10 @@ func (r *scriptedRuntime) Launch(_ context.Context, req session.LaunchRequest) (
 	return r.identity, nil
 }
 
-func (r *scriptedRuntime) Observe(context.Context, session.ProcessIdentity) (session.LivenessObservation, error) {
+func (r *scriptedRuntime) Observe(_ context.Context, id session.ProcessIdentity) (session.LivenessObservation, error) {
+	if r.observeFn != nil {
+		return r.observeFn(id)
+	}
 	return session.LivenessObservation{}, fmt.Errorf("the scripted runtime does not probe")
 }
 
