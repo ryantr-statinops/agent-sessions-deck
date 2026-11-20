@@ -109,3 +109,42 @@ func TestEncodeKeyFunctionsAndAltModifiers(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeKeyPasteAndMultibyteUTF8(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      tea.KeyMsg
+		expected []byte
+	}{
+		{
+			"Bracketed paste multiline",
+			tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello\nworld"), Paste: true},
+			[]byte("\x1b[200~hello\nworld\x1b[201~"),
+		},
+		{
+			"Multibyte Vietnamese",
+			tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Tiếng Việt")},
+			[]byte("Tiếng Việt"),
+		},
+		{
+			"CJK Chinese",
+			tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("你好世界")},
+			[]byte("你好世界"),
+		},
+		{
+			"Emoji",
+			tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("🚀")},
+			[]byte("🚀"),
+		},
+	}
+
+	mode := InputMode{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := EncodeKey(tc.msg, mode)
+			if !bytes.Equal(got, tc.expected) {
+				t.Fatalf("EncodeKey(%v) = %q, want %q", tc.msg, got, tc.expected)
+			}
+		})
+	}
+}

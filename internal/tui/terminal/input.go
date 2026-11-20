@@ -15,6 +15,16 @@ type InputMode struct {
 // EncodeKey translates a Bubble Tea tea.KeyMsg into raw VT byte sequences
 // destined for a child PTY.
 func EncodeKey(msg tea.KeyMsg, mode InputMode) []byte {
+	// Bracketed paste wrapping
+	if msg.Paste {
+		content := string(msg.Runes)
+		res := make([]byte, 0, len(content)+12)
+		res = append(res, "\x1b[200~"...)
+		res = append(res, content...)
+		res = append(res, "\x1b[201~"...)
+		return res
+	}
+
 	bytes := encodeKeyBase(msg, mode)
 	if len(bytes) == 0 {
 		return nil
