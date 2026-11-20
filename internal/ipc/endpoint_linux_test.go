@@ -108,6 +108,37 @@ func TestStaleSocketAutomatedCleanupOnBootstrap(t *testing.T) {
 	}
 }
 
+func TestActiveOwnerSocketProtectedAgainstConcurrentDeletion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "active.sock")
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	// Handle incoming connections in background so dial succeeds
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	// Calling removeStaleSocket on active socket must refuse with ErrSocketActive
+	err = removeStaleSocket(path)
+	if !errors.Is(err, ErrSocketActive) {
+		t.Fatalf("expected ErrSocketActive, got %v", err)
+	}
+
+	// Socket file must remain intact
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("active socket file was removed: %v", err)
+	}
+}
+
 func TestVerifyPeerUIDAcceptsSameUserConnection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "peer.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})

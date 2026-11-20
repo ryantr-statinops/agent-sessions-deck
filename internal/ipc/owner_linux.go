@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/store"
 )
 
@@ -73,6 +74,9 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 		return nil, fmt.Errorf("secure socket directory: %w", err)
 	}
 	if err := removeStaleSocket(socketPath); err != nil {
+		if errors.Is(err, ErrSocketActive) {
+			return nil, session.NewError(session.CodeOwnerUnavailable, "owner", "an active owner is serving control socket "+socketPath, "connect to the existing owner or stop it first")
+		}
 		return nil, err
 	}
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
