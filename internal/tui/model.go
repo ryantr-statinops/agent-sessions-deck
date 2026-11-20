@@ -9,6 +9,7 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
+	termview "github.com/ryantr-statinops/agent-sessions-deck/internal/tui/terminal"
 )
 
 // Model is the top-level Bubble Tea model orchestrating the TUI views.
@@ -53,6 +54,15 @@ type Model struct {
 	// Window dimensions
 	width  int
 	height int
+
+	// Terminal view state
+	activeSessionID string
+	activeSub       app.TerminalSubscription
+	terminalScreen  app.TerminalScreen
+	terminalPrefix  *termview.PrefixMachine
+	terminalScroll  *termview.ScrollController
+	terminalExited  bool
+	terminalExitErr error
 }
 
 // NewModel instantiates a Model configured with application client and environment options.
@@ -65,6 +75,8 @@ func NewModel(opts Options) Model {
 		mode:             ViewDashboard,
 		recentWorkspaces: opts.RecentWorkspaces,
 		agents:           opts.InitialAgents,
+		terminalPrefix:   termview.NewPrefixMachine(),
+		terminalScroll:   termview.NewScrollController(nil),
 		width:            80,
 		height:           24,
 	}
@@ -124,12 +136,49 @@ func (m Model) loadAgentsCmd(seq AsyncSeq) tea.Cmd {
 	}
 }
 
+// openSessionCmd opens an interactive terminal stream to a session.
+func (m Model) openSessionCmd(sessionID string) tea.Cmd {
+	client := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		res, err := client.Open(ctx, app.OpenRequest{
+			Ref:    sessionID,
+			Holder: "tui-client",
+		})
+		return SessionOpenResultMsg{
+			SessionID: sessionID,
+			Result:    res,
+			Err:       err,
+		}
+	}
+}
+
+// detachSessionCmd asynchronously asks the client to detach and release the lease.
+func (m Model) detachSessionCmd(sessionID string) tea.Cmd {
+	if m.client == nil || sessionID == "" {
+		return nil
+	}
+	client := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_, _ = client.Detach(ctx, app.DetachRequest{Ref: sessionID})
+		return nil
+	}
+}
+
 // Update handles incoming messages and events.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.mode == ViewTerminal && m.activeSub != nil {
+			cols, rows := termview.ViewportDimensions(m.width, m.height)
+			_ = m.activeSub.Resize(cols, rows)
+		}
 		return m, nil
 
 	case SessionListMsg:
@@ -198,11 +247,102 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case TerminalFrameMsg:
+		if msg.SessionID != m.activeSessionID || m.mode != ViewTerminal {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.terminalExitErr = msg.Err
+			m.terminalExited = true
+			return m, nil
+		}
+		m.applyTerminalFrame(msg.Frame)
+		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
+
+	case SessionOpenResultMsg:
+		if msg.Err != nil {
+			m.setStatus("Failed to open session: "+msg.Err.Error(), true, 5*time.Second)
+			return m, nil
+		}
+		m.mode = ViewTerminal
+		m.activeSessionID = msg.SessionID
+		m.activeSub = msg.Result.Terminal
+		if msg.Result.Terminal != nil {
+			m.terminalScreen = msg.Result.Terminal.InitialSnapshot().Screen
+		}
+		m.terminalExited = false
+		m.terminalExitErr = nil
+		if m.terminalPrefix != nil {
+			m.terminalPrefix.Reset()
+		}
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(m.terminalScreen.AlternateScreen)
+			m.terminalScroll.ScrollToBottom()
+		}
+		if m.activeSub != nil {
+			cols, rows := termview.ViewportDimensions(m.width, m.height)
+			_ = m.activeSub.Resize(cols, rows)
+		}
+		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
+
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 	}
 
 	return m, nil
+}
+
+// waitForFrameCmd listens asynchronously for terminal frames from an active subscription.
+func waitForFrameCmd(sub app.TerminalSubscription, sessionID string) tea.Cmd {
+	if sub == nil || sessionID == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		frame, err := sub.ReadFrame()
+		return TerminalFrameMsg{
+			SessionID: sessionID,
+			Frame:     frame,
+			Err:       err,
+		}
+	}
+}
+
+// applyTerminalFrame merges incoming terminal frames into the active screen model.
+func (m *Model) applyTerminalFrame(frame app.TerminalFrame) {
+	if frame.Snapshot != nil {
+		m.terminalScreen = frame.Snapshot.Screen
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(frame.Snapshot.Screen.AlternateScreen)
+		}
+		return
+	}
+
+	if frame.Delta != nil {
+		delta := frame.Delta
+		m.terminalScreen.Columns = delta.Columns
+		m.terminalScreen.Rows = delta.Rows
+		m.terminalScreen.Cursor = delta.Cursor
+		m.terminalScreen.AlternateScreen = delta.AlternateScreen
+		m.terminalScreen.ScrollbackLines = delta.ScrollbackLines
+
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(delta.AlternateScreen)
+		}
+
+		if len(m.terminalScreen.Lines) < delta.Rows {
+			newLines := make([]app.TerminalLine, delta.Rows)
+			copy(newLines, m.terminalScreen.Lines)
+			m.terminalScreen.Lines = newLines
+		} else if len(m.terminalScreen.Lines) > delta.Rows && delta.Rows > 0 {
+			m.terminalScreen.Lines = m.terminalScreen.Lines[:delta.Rows]
+		}
+
+		for _, line := range delta.Lines {
+			if line.Index >= 0 && line.Index < len(m.terminalScreen.Lines) {
+				m.terminalScreen.Lines[line.Index] = line
+			}
+		}
+	}
 }
 
 // setStatus sets a temporary status bar message with auto-expiry.

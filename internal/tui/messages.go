@@ -50,3 +50,17 @@ type SuspendForAttachMsg struct {
 type QuitMsg struct {
 	StopSessions bool
 }
+
+// TerminalFrameMsg delivers an asynchronous terminal frame update from a session subscription.
+type TerminalFrameMsg struct {
+	SessionID string
+	Frame     app.TerminalFrame
+	Err       error
+}
+
+// SessionOpenResultMsg delivers the result of opening a session stream.
+type SessionOpenResultMsg struct {
+	SessionID string
+	Result    app.OpenResult
+	Err       error
+}

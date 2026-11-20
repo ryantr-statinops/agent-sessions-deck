@@ -19,6 +19,8 @@ const (
 	ViewConfirm
 	// ViewHelp is the keyboard shortcuts overlay.
 	ViewHelp
+	// ViewTerminal is the interactive virtual terminal view.
+	ViewTerminal
 )
 
 // String returns a human-readable name for the ViewMode.
@@ -32,6 +34,8 @@ func (m ViewMode) String() string {
 		return "Confirm"
 	case ViewHelp:
 		return "Help"
+	case ViewTerminal:
+		return "Terminal"
 	default:
 		return "Unknown"
 	}

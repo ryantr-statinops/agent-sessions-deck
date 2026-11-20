@@ -15,6 +15,7 @@ type mockAppClient struct {
 	app.Client
 	listFunc func(ctx context.Context, req app.ListRequest) (app.ListResult, error)
 	scanFunc func(ctx context.Context, req app.ScanRequest) (app.ScanResult, error)
+	openFunc func(ctx context.Context, req app.OpenRequest) (app.OpenResult, error)
 }
 
 func (m *mockAppClient) List(ctx context.Context, req app.ListRequest) (app.ListResult, error) {
@@ -29,6 +30,13 @@ func (m *mockAppClient) Scan(ctx context.Context, req app.ScanRequest) (app.Scan
 		return m.scanFunc(ctx, req)
 	}
 	return app.ScanResult{}, nil
+}
+
+func (m *mockAppClient) Open(ctx context.Context, req app.OpenRequest) (app.OpenResult, error) {
+	if m.openFunc != nil {
+		return m.openFunc(ctx, req)
+	}
+	return app.OpenResult{}, nil
 }
 
 func TestModelInitialization(t *testing.T) {
@@ -47,6 +55,12 @@ func TestModelInitialization(t *testing.T) {
 	}
 	if m.launcherWorkspace != "/workspace/test" {
 		t.Fatalf("expected launcherWorkspace '/workspace/test', got %q", m.launcherWorkspace)
+	}
+	if m.terminalPrefix == nil || m.terminalScroll == nil {
+		t.Fatal("expected terminalPrefix and terminalScroll to be initialized")
+	}
+	if ViewTerminal.String() != "Terminal" {
+		t.Fatalf("expected ViewTerminal.String() == 'Terminal', got %q", ViewTerminal.String())
 	}
 
 	cmd := m.Init()
@@ -160,5 +174,175 @@ func TestModelKeyNavigation(t *testing.T) {
 	mUp5 := updated4.(Model)
 	if mUp5.mode != ViewHelp {
 		t.Fatalf("expected mode ViewHelp after '?', got %v", mUp5.mode)
+	}
+}
+
+type mockTerminalSub struct {
+	app.TerminalSubscription
+	frame       app.TerminalFrame
+	err         error
+	resizeCols  int
+	resizeRows  int
+	resizeCount int
+}
+
+func (m *mockTerminalSub) ReadFrame() (app.TerminalFrame, error) {
+	return m.frame, m.err
+}
+
+func (m *mockTerminalSub) InitialSnapshot() app.TerminalSnapshot {
+	if m.frame.Snapshot != nil {
+		return *m.frame.Snapshot
+	}
+	return app.TerminalSnapshot{}
+}
+
+func (m *mockTerminalSub) Resize(cols, rows int) error {
+	m.resizeCols = cols
+	m.resizeRows = rows
+	m.resizeCount++
+	return nil
+}
+
+func TestTerminalResizeOnWindowSize(t *testing.T) {
+	sub := &mockTerminalSub{}
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSub = sub
+
+	// Send WindowSizeMsg 100x30
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	mUpdated := updated.(Model)
+
+	if mUpdated.width != 100 || mUpdated.height != 30 {
+		t.Fatalf("expected dimensions 100x30, got %dx%d", mUpdated.width, mUpdated.height)
+	}
+	if sub.resizeCount != 1 || sub.resizeCols != 100 || sub.resizeRows != 29 {
+		t.Fatalf("expected sub.Resize(100, 29), got count=%d cols=%d rows=%d",
+			sub.resizeCount, sub.resizeCols, sub.resizeRows)
+	}
+}
+
+func TestWaitForFrameCmd(t *testing.T) {
+	sub := &mockTerminalSub{
+		frame: app.TerminalFrame{Sequence: 42},
+	}
+	cmd := waitForFrameCmd(sub, "sess-1")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+
+	msg := cmd()
+	frameMsg, ok := msg.(TerminalFrameMsg)
+	if !ok {
+		t.Fatalf("expected TerminalFrameMsg, got %T", msg)
+	}
+	if frameMsg.SessionID != "sess-1" || frameMsg.Frame.Sequence != 42 {
+		t.Fatalf("unexpected frameMsg: %+v", frameMsg)
+	}
+}
+
+func TestApplyTerminalFrame(t *testing.T) {
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "test-sess"
+
+	// 1. Snapshot application
+	snapshot := &app.TerminalSnapshot{
+		Sequence: 1,
+		Screen: app.TerminalScreen{
+			Columns: 10,
+			Rows:    2,
+			Lines: []app.TerminalLine{
+				{Index: 0, Cells: []app.TerminalCell{{Text: "Hello"}}},
+				{Index: 1, Cells: []app.TerminalCell{{Text: "World"}}},
+			},
+			Cursor: app.TerminalCursor{X: 5, Y: 0, Visible: true},
+		},
+	}
+	m.applyTerminalFrame(app.TerminalFrame{Snapshot: snapshot})
+	if m.terminalScreen.Columns != 10 || len(m.terminalScreen.Lines) != 2 {
+		t.Fatalf("expected 2 lines of 10 cols, got %+v", m.terminalScreen)
+	}
+	if m.terminalScreen.Lines[0].Cells[0].Text != "Hello" {
+		t.Fatalf("expected 'Hello', got %q", m.terminalScreen.Lines[0].Cells[0].Text)
+	}
+
+	// 2. Incremental Delta application
+	delta := &app.TerminalDelta{
+		BaseSequence: 1,
+		Columns:      10,
+		Rows:         2,
+		Lines: []app.TerminalLine{
+			{Index: 1, Cells: []app.TerminalCell{{Text: "Updated"}}},
+		},
+		Cursor: app.TerminalCursor{X: 7, Y: 1, Visible: true},
+	}
+	m.applyTerminalFrame(app.TerminalFrame{Delta: delta})
+	if m.terminalScreen.Lines[0].Cells[0].Text != "Hello" {
+		t.Fatalf("line 0 should remain 'Hello', got %q", m.terminalScreen.Lines[0].Cells[0].Text)
+	}
+	if m.terminalScreen.Lines[1].Cells[0].Text != "Updated" {
+		t.Fatalf("line 1 should be 'Updated', got %q", m.terminalScreen.Lines[1].Cells[0].Text)
+	}
+	if m.terminalScreen.Cursor.X != 7 || m.terminalScreen.Cursor.Y != 1 {
+		t.Fatalf("expected cursor at (7,1), got (%d,%d)", m.terminalScreen.Cursor.X, m.terminalScreen.Cursor.Y)
+	}
+}
+
+func TestTerminalStreamTerminationFreezesFinalScreen(t *testing.T) {
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSessionID = "active-1"
+	m.terminalScreen = app.TerminalScreen{
+		Columns: 10,
+		Rows:    1,
+		Lines: []app.TerminalLine{
+			{Index: 0, Cells: []app.TerminalCell{{Text: "Final Output"}}},
+		},
+	}
+
+	// Deliver EOF
+	updated, cmd := m.Update(TerminalFrameMsg{
+		SessionID: "active-1",
+		Err:       errors.New("EOF"),
+	})
+
+	mFinal := updated.(Model)
+	if !mFinal.terminalExited {
+		t.Fatal("expected terminalExited to be true")
+	}
+	if mFinal.terminalExitErr == nil {
+		t.Fatal("expected non-nil terminalExitErr")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil command after EOF (stream finished)")
+	}
+	if len(mFinal.terminalScreen.Lines) != 1 || mFinal.terminalScreen.Lines[0].Cells[0].Text != "Final Output" {
+		t.Fatalf("expected final screen content to be preserved, got %+v", mFinal.terminalScreen)
+	}
+}
+
+func TestOpenSessionTransitionsToViewTerminal(t *testing.T) {
+	sub := &mockTerminalSub{
+		frame: app.TerminalFrame{
+			Snapshot: &app.TerminalSnapshot{
+				Screen: app.TerminalScreen{Columns: 80, Rows: 24},
+			},
+		},
+	}
+	client := &mockAppClient{
+		openFunc: func(ctx context.Context, req app.OpenRequest) (app.OpenResult, error) {
+			return app.OpenResult{Terminal: sub}, nil
+		},
+	}
+	m := NewModel(Options{Client: client})
+	cmd := m.openSessionCmd("s1")
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	mUpdated := updated.(Model)
+	if mUpdated.mode != ViewTerminal || mUpdated.activeSessionID != "s1" {
+		t.Fatalf("expected ViewTerminal mode and activeSessionID 's1', got mode=%v id=%s",
+			mUpdated.mode, mUpdated.activeSessionID)
 	}
 }

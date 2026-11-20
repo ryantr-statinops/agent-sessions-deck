@@ -5,7 +5,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"io"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,43 +50,21 @@ func runTUI(ctx context.Context, opts Options) error {
 		recent = []string{"."}
 	}
 
-	for {
-		m := tui.NewModel(tui.Options{
-			Client:           client,
-			Paths:            opts.Paths,
-			Config:           opts.Config,
-			IsOwner:          isOwner,
-			RecentWorkspaces: recent,
-		})
+	m := tui.NewModel(tui.Options{
+		Client:           client,
+		Paths:            opts.Paths,
+		Config:           opts.Config,
+		IsOwner:          isOwner,
+		RecentWorkspaces: recent,
+	})
 
-		p := tea.NewProgram(
-			m,
-			tea.WithInput(opts.Stdin),
-			tea.WithOutput(opts.Stdout),
-			tea.WithAltScreen(),
-		)
+	p := tea.NewProgram(
+		m,
+		tea.WithInput(opts.Stdin),
+		tea.WithOutput(opts.Stdout),
+		tea.WithAltScreen(),
+	)
 
-		finalModel, err := p.Run()
-		if err != nil {
-			return err
-		}
-
-		mFinal, ok := finalModel.(tui.Model)
-		if !ok {
-			break
-		}
-
-		attachID := mFinal.AttachTarget()
-		if attachID == "" {
-			break
-		}
-
-		// Option A: handover to attach loop
-		attachErr := attach(ctx, client, attachID, "tui-client", opts)
-		if attachErr != nil && !errors.Is(attachErr, io.EOF) && !errors.Is(attachErr, context.Canceled) {
-			// Attach error: continue back to TUI loop
-		}
-	}
-
-	return nil
+	_, err = p.Run()
+	return err
 }

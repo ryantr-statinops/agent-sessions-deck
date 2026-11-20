@@ -6,16 +6,19 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	termview "github.com/ryantr-statinops/agent-sessions-deck/internal/tui/terminal"
 )
 
 // handleKeyMsg routes key presses depending on the active view mode and search state.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global exit shortcut
-	if msg.Type == tea.KeyCtrlC {
+	// Global exit shortcut (except in terminal view, where Ctrl+C is forwarded to child PTY)
+	if msg.Type == tea.KeyCtrlC && m.mode != ViewTerminal {
 		return m.RequestQuit()
 	}
 
 	switch m.mode {
+	case ViewTerminal:
+		return m.handleTerminalKey(msg)
 	case ViewConfirm:
 		return m.handleConfirmKey(msg)
 	case ViewHelp:
@@ -24,6 +27,109 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleLauncherKey(msg)
 	case ViewDashboard:
 		return m.handleDashboardKey(msg)
+	}
+
+	return m, nil
+}
+
+func (m Model) handleTerminalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.terminalPrefix == nil {
+		m.terminalPrefix = termview.NewPrefixMachine()
+	}
+
+	res := m.terminalPrefix.ProcessKey(msg)
+	if res.Handled {
+		switch res.Action {
+		case termview.ActionDetach:
+			if m.activeSub != nil {
+				_ = m.activeSub.Close()
+				m.activeSub = nil
+			}
+			sessID := m.activeSessionID
+			m.activeSessionID = ""
+			m.mode = ViewDashboard
+			seq := m.NextSeq()
+			return m, tea.Batch(m.detachSessionCmd(sessID), m.loadSessionsCmd(seq))
+
+		case termview.ActionNew:
+			if m.activeSub != nil {
+				_ = m.activeSub.Close()
+				m.activeSub = nil
+			}
+			sessID := m.activeSessionID
+			m.activeSessionID = ""
+			m.mode = ViewLauncher
+			return m, m.detachSessionCmd(sessID)
+
+		case termview.ActionHelp:
+			m.returnMode = ViewTerminal
+			m.mode = ViewHelp
+			return m, nil
+
+		case termview.ActionScroll:
+			if m.terminalScroll != nil {
+				m.terminalScroll.ScrollUp(1)
+			}
+			return m, nil
+
+		case termview.ActionSendLiteral:
+			if m.activeSub != nil {
+				_, _ = m.activeSub.Write([]byte{res.LiteralByte})
+			}
+			return m, nil
+
+		case termview.ActionNone:
+			return m, nil
+		}
+	}
+
+	// If currently scrolled, handle history navigation keys
+	if m.terminalScroll != nil && m.terminalScroll.IsScrolled() {
+		switch msg.Type {
+		case tea.KeyEsc, tea.KeyEnter:
+			m.terminalScroll.ScrollToBottom()
+			return m, nil
+		case tea.KeyUp:
+			m.terminalScroll.ScrollUp(1)
+			return m, nil
+		case tea.KeyDown:
+			m.terminalScroll.ScrollDown(1)
+			return m, nil
+		case tea.KeyPgUp:
+			m.terminalScroll.ScrollUp(10)
+			return m, nil
+		case tea.KeyPgDown:
+			m.terminalScroll.ScrollDown(10)
+			return m, nil
+		}
+		if msg.String() == "k" {
+			m.terminalScroll.ScrollUp(1)
+			return m, nil
+		}
+		if msg.String() == "j" {
+			m.terminalScroll.ScrollDown(1)
+			return m, nil
+		}
+		return m, nil
+	}
+
+	// Normal terminal interaction: check for PgUp in normal screen mode
+	if msg.Type == tea.KeyPgUp && !m.terminalScreen.AlternateScreen {
+		if m.terminalScroll != nil {
+			m.terminalScroll.ScrollUp(10)
+		}
+		return m, nil
+	}
+
+	// Normal key forwarding to child PTY
+	if m.activeSub != nil {
+		mode := termview.InputMode{
+			AppCursorKeys: m.terminalScreen.AlternateScreen,
+		}
+		encoded := termview.EncodeKey(msg, mode)
+		if len(encoded) > 0 {
+			_, _ = m.activeSub.Write(encoded)
+		}
 	}
 
 	return m, nil
@@ -156,8 +262,7 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		if sel, ok := m.SelectedSession(); ok {
-			m.attachTarget = string(sel.ID)
-			return m, tea.Quit
+			return m, m.openSessionCmd(string(sel.ID))
 		}
 		return m, nil
 	case "r":
