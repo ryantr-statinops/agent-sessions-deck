@@ -54,6 +54,44 @@ func TestOverflowDropsAndMarksResyncRequired(t *testing.T) {
 	}
 }
 
+func TestDropOldestPolicyOnOverflow(t *testing.T) {
+	publisher := newTestPublisher(t)
+	sub, err := publisher.Subscribe(context.Background(), 2, WithDropOldest())
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	events := publishCount(t, publisher, 5)
+
+	stats := sub.Stats()
+	if !stats.ResyncRequired {
+		t.Fatal("ResyncRequired = false, want true")
+	}
+	if stats.ResyncRevision != 5 {
+		t.Fatalf("ResyncRevision = %d, want 5", stats.ResyncRevision)
+	}
+	if stats.Pending != 2 {
+		t.Fatalf("Pending = %d, want 2", stats.Pending)
+	}
+	if stats.Dropped != 3 {
+		t.Fatalf("Dropped = %d, want 3", stats.Dropped)
+	}
+
+	// Because of drop-oldest, events 1, 2, 3 were dropped, and 4, 5 are buffered.
+	n1 := recvWithin(t, sub)
+	e1, ok := n1.Event()
+	if !ok || e1.Revision() != events[3].Revision() {
+		t.Fatalf("first remaining event revision = %d, want %d", e1.Revision(), events[3].Revision())
+	}
+
+	n2 := recvWithin(t, sub)
+	e2, ok := n2.Event()
+	if !ok || e2.Revision() != events[4].Revision() {
+		t.Fatalf("second remaining event revision = %d, want %d", e2.Revision(), events[4].Revision())
+	}
+}
+
 func TestResyncMarkerArrivesWhenSpacePermitsAndDeliveryResumes(t *testing.T) {
 	publisher := newTestPublisher(t)
 	sub := mustSubscribe(t, publisher, 2)
