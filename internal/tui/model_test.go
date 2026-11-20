@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
@@ -344,5 +345,51 @@ func TestOpenSessionTransitionsToViewTerminal(t *testing.T) {
 	if mUpdated.mode != ViewTerminal || mUpdated.activeSessionID != "s1" {
 		t.Fatalf("expected ViewTerminal mode and activeSessionID 's1', got mode=%v id=%s",
 			mUpdated.mode, mUpdated.activeSessionID)
+	}
+}
+
+func TestModelHandlesResyncMsgByReloadingSessions(t *testing.T) {
+	listCalled := 0
+	client := &mockAppClient{
+		listFunc: func(ctx context.Context, req app.ListRequest) (app.ListResult, error) {
+			listCalled++
+			return app.ListResult{
+				Snapshot: session.Snapshot{
+					Sessions: []session.SessionSnapshot{
+						{ID: session.ID("resynced-id"), Name: "resynced"},
+					},
+				},
+			}, nil
+		},
+	}
+	m := NewModel(Options{Client: client})
+
+	// Sending ResyncMsg triggers reload
+	updated, cmd := m.Update(ResyncMsg{Revision: 42})
+	if cmd == nil {
+		t.Fatal("expected non-nil reload cmd from ResyncMsg")
+	}
+	msg := cmd()
+	listMsg, ok := msg.(SessionListMsg)
+	if !ok {
+		t.Fatalf("expected SessionListMsg, got %T", msg)
+	}
+	if listCalled != 1 {
+		t.Fatalf("list called %d times, want 1", listCalled)
+	}
+
+	updated2, _ := updated.Update(listMsg)
+	mUpdated := updated2.(Model)
+	if len(mUpdated.sessions) != 1 || mUpdated.sessions[0].Name != "resynced" {
+		t.Fatalf("expected 1 session with name resynced, got %+v", mUpdated.sessions)
+	}
+
+	// Sending events.Event of TypeResyncRequired also triggers reload
+	event := events.NewPublisher().Revision()
+	_ = event
+	updated3, cmd2 := m.Update(events.Notification{})
+	_ = updated3
+	if cmd2 == nil {
+		t.Fatal("expected non-nil reload cmd from notification")
 	}
 }

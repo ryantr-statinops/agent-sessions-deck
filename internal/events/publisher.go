@@ -10,7 +10,7 @@ import (
 
 // DefaultBufferSize is the subscription buffer size a caller gets when it does
 // not care about the exact bound.
-const DefaultBufferSize = 64
+const DefaultBufferSize = 256
 
 // defaultIDMint derives a stable event ID from the revision, so a publisher
 // without injected dependencies still produces deterministic IDs.
@@ -178,11 +178,11 @@ func (p *Publisher) publish(spec Spec, rev Revision, assignNext bool) (Event, er
 // When ctx is non-nil, cancelling it closes the subscription, which is the
 // cancel path for a subscriber that goes away; [Subscription.Close] is the
 // explicit equivalent and is idempotent.
-func (p *Publisher) Subscribe(ctx context.Context, buffer int) (*Subscription, error) {
+func (p *Publisher) Subscribe(ctx context.Context, buffer int, opts ...SubscriptionOption) (*Subscription, error) {
 	if buffer < 1 {
 		return nil, fmt.Errorf("%w: got %d", ErrInvalidBuffer, buffer)
 	}
-	sub := newSubscription(p, buffer)
+	sub := newSubscription(p, buffer, opts...)
 
 	p.mu.Lock()
 	if p.closed {

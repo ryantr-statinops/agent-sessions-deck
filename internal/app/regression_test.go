@@ -79,8 +79,10 @@ func TestStopSucceedsWhenTheWaiterRecordedTheReapFirst(t *testing.T) {
 			t.Errorf("the waiter could not record the reap: %v", err)
 			return
 		}
-		if _, err := h.svc.commit(ctx()); err != nil {
+		if _, release, err := h.svc.commit(ctx()); err != nil {
 			t.Errorf("the waiter could not commit the reap: %v", err)
+		} else {
+			release()
 		}
 	}
 

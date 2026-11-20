@@ -142,6 +142,14 @@ type Service struct {
 	// applies, the port calls, the store commit and the event publish, so a
 	// use case observes and commits one state.
 	mutMu sync.Mutex
+	// sessionLocks serializes mutations per session reference.
+	sessionLocksMu sync.Mutex
+	sessionLocks   map[string]*sync.Mutex
+	// recentRestarts tracks the last successful restart per session for idempotency.
+	recentRestartsMu sync.Mutex
+	recentRestarts   map[session.ID]recentRestart
+	// commitMu serializes store commit and event publication across sessions.
+	commitMu sync.Mutex
 	// writeFault latches the first store write failure. It is read and written
 	// only under mutMu.
 	writeFault error
@@ -177,6 +185,13 @@ type heldLease struct {
 	subscription TerminalSubscription
 }
 
+type recentRestart struct {
+	previousGeneration session.Generation
+	revision           uint64
+	event              events.Event
+	at                 time.Time
+}
+
 // NewService builds the application service and loads the stored sessions.
 //
 // Loading here is what makes the owner's in-memory state and the store agree
@@ -188,18 +203,20 @@ func NewService(ctx context.Context, deps Deps, opts ...Option) (*Service, error
 		return nil, err
 	}
 	s := &Service{
-		registry:   deps.Registry,
-		workspaces: deps.Workspaces,
-		store:      deps.Store,
-		runtime:    deps.Runtime,
-		leases:     deps.Leases,
-		terminals:  deps.Terminals,
-		events:     deps.Events,
-		clock:      deps.Clock,
-		ids:        deps.IDs,
-		authority:  session.AuthorityLive,
-		grace:      defaultStopGrace,
-		held:       make(map[attemptKey]heldLease),
+		registry:       deps.Registry,
+		workspaces:     deps.Workspaces,
+		store:          deps.Store,
+		runtime:        deps.Runtime,
+		leases:         deps.Leases,
+		terminals:      deps.Terminals,
+		events:         deps.Events,
+		clock:          deps.Clock,
+		ids:            deps.IDs,
+		authority:      session.AuthorityLive,
+		grace:          defaultStopGrace,
+		held:           make(map[attemptKey]heldLease),
+		sessionLocks:   make(map[string]*sync.Mutex),
+		recentRestarts: make(map[session.ID]recentRestart),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -217,7 +234,9 @@ func NewService(ctx context.Context, deps Deps, opts ...Option) (*Service, error
 
 	stored, revision, err := s.store.Load(ctx)
 	if err != nil {
-		return nil, storeError("read the session metadata", revision, err)
+		return nil, session.WrapError(session.CodeCorruptState, "session store",
+			"the stored session metadata is corrupt or unreadable: "+err.Error(),
+			"repair the stored record by hand; asd never resets session metadata for you", err)
 	}
 	engine, err := session.NewEngine(stored...)
 	if err != nil {
@@ -249,7 +268,7 @@ func (s *Service) now() time.Time { return s.clock.Now() }
 // Mutation lock and the write latch
 // ---------------------------------------------------------------------------
 
-// enterMutation takes the owner-wide mutation lock and returns the function that
+// enterMutation takes the per-session mutation lock and returns the function that
 // releases it.
 //
 // It also refuses the mutation when the owner has already lost its ability to
@@ -262,12 +281,39 @@ func (s *Service) now() time.Time { return s.clock.Now() }
 // leaves the recovery to the operator: reads keep working, because a read cannot
 // make the divergence worse and an operator needs them to see what happened.
 func (s *Service) enterMutation(subject string) (func(), error) {
-	s.mutMu.Lock()
-	if s.writeFault != nil {
-		s.mutMu.Unlock()
+	key := s.lockKey(subject)
+	lk := s.getSessionLock(key)
+	lk.Lock()
+
+	if fault := s.isWriteFaulted(); fault != nil {
+		lk.Unlock()
 		return nil, s.writeUnavailable(subject)
 	}
-	return s.mutMu.Unlock, nil
+	return lk.Unlock, nil
+}
+
+func (s *Service) lockKey(subject string) string {
+	if id, err := s.resolve(subject); err == nil {
+		return string(id)
+	}
+	return subject
+}
+
+func (s *Service) getSessionLock(key string) *sync.Mutex {
+	s.sessionLocksMu.Lock()
+	defer s.sessionLocksMu.Unlock()
+	lk, ok := s.sessionLocks[key]
+	if !ok {
+		lk = &sync.Mutex{}
+		s.sessionLocks[key] = lk
+	}
+	return lk
+}
+
+func (s *Service) isWriteFaulted() error {
+	s.mutMu.Lock()
+	defer s.mutMu.Unlock()
+	return s.writeFault
 }
 
 // writeUnavailable reports the latched write failure with the recovery the
@@ -284,6 +330,8 @@ func (s *Service) writeUnavailable(subject string) error {
 // restarted. It is called under the mutation lock, which is the only place a
 // write happens.
 func (s *Service) latchWrite(err error) {
+	s.mutMu.Lock()
+	defer s.mutMu.Unlock()
 	if s.writeFault == nil {
 		s.writeFault = err
 	}
@@ -477,7 +525,8 @@ func rejectionError(outcome session.Outcome) error {
 // A failure latches the owner: the engine is now ahead of the store, so no later
 // mutation may write it. The caller returns the typed store error unchanged, so
 // the use case still reports what actually failed.
-func (s *Service) commit(ctx context.Context) (uint64, error) {
+func (s *Service) commit(ctx context.Context) (uint64, func(), error) {
+	s.commitMu.Lock()
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
 	expected := s.storeRevision
@@ -487,10 +536,11 @@ func (s *Service) commit(ctx context.Context) (uint64, error) {
 		// function returns, so the recovery message a later caller reads is not the
 		// same failure described twice.
 		s.latchWrite(err)
-		return 0, storeError("write the session metadata", expected, err)
+		s.commitMu.Unlock()
+		return 0, nil, storeError("write the session metadata", expected, err)
 	}
 	s.storeRevision = next
-	return next, nil
+	return next, s.commitMu.Unlock, nil
 }
 
 // loadPersisted reads the store's current sessions and revision.
@@ -507,17 +557,19 @@ func (s *Service) loadPersisted(ctx context.Context) ([]session.Session, uint64,
 
 // deletePersisted removes one session's metadata at the observed revision. A
 // failure latches the owner for the same reason a failed commit does.
-func (s *Service) deletePersisted(ctx context.Context, id session.ID) (uint64, error) {
+func (s *Service) deletePersisted(ctx context.Context, id session.ID) (uint64, func(), error) {
+	s.commitMu.Lock()
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
 	expected := s.storeRevision
 	next, err := s.store.Delete(ctx, id, expected)
 	if err != nil {
 		s.latchWrite(err)
-		return 0, storeError("delete the session metadata", expected, err)
+		s.commitMu.Unlock()
+		return 0, nil, storeError("delete the session metadata", expected, err)
 	}
 	s.storeRevision = next
-	return next, nil
+	return next, s.commitMu.Unlock, nil
 }
 
 // ---------------------------------------------------------------------------

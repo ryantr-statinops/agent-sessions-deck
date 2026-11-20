@@ -87,3 +87,64 @@ func TestProbeAgentsDistinguishesAvailableMissingAndUncertain(t *testing.T) {
 		t.Fatalf("opencode probe = %+v", byID["opencode"])
 	}
 }
+
+func TestOwnerStartupReconcilesStoredState(t *testing.T) {
+	paths := config.Paths{
+		StateDir:   t.TempDir(),
+		ConfigDir:  t.TempDir(),
+		RuntimeDir: t.TempDir(),
+	}
+	cfg := config.Default()
+	cfg.Agents = []config.Agent{
+		{
+			ID:         "sh",
+			Name:       "Shell",
+			Executable: "/bin/sh",
+		},
+	}
+
+	ctx := context.Background()
+	rt1, err := Start(ctx, paths, cfg)
+	if err != nil {
+		t.Fatalf("Start rt1: %v", err)
+	}
+
+	// Create session
+	ws := t.TempDir()
+	created, err := rt1.Client().Create(ctx, app.CreateRequest{
+		Agent:         "sh",
+		WorkspacePath: ws,
+		Name:          "startup-reconcile-test",
+		ExtraArgs:     []string{"-c", "sleep 10"},
+	})
+	if err != nil {
+		_ = rt1.Close()
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Close owner 1 without killing the process
+	if err := rt1.Close(); err != nil {
+		t.Fatalf("Close rt1: %v", err)
+	}
+
+	// Start owner 2 on the same paths
+	rt2, err := Start(ctx, paths, cfg)
+	if err != nil {
+		t.Fatalf("Start rt2: %v", err)
+	}
+	defer func() {
+		_, _ = rt2.Client().Kill(ctx, app.KillRequest{Ref: string(created.Session.ID), Signal: session.SignalKill})
+		_ = rt2.Close()
+	}()
+
+	// Query session from rt2
+	res, err := rt2.Client().Get(ctx, app.GetRequest{Ref: string(created.Session.ID)})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	// Should be reconciled to Orphaned (since the child is still alive in background, but PTY is gone)
+	if !res.Session.Orphaned() {
+		t.Fatalf("expected session to be reconciled to Orphaned, got %+v", res.Session)
+	}
+}

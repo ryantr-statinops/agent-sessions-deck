@@ -28,6 +28,7 @@ const (
 	TypeSessionDead      Type = "session.dead"
 	TypeSessionRestarted Type = "session.restarted"
 	TypeWorkspaceChanged Type = "workspace.changed"
+	TypeResyncRequired   Type = "resync.required"
 )
 
 // SessionID is the logical session that owns an event. The zero value means the

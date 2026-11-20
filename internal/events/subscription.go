@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Notification is one delivery to a subscriber: either a metadata event or a
@@ -33,6 +34,23 @@ func (n Notification) Event() (Event, bool) {
 		return Event{}, false
 	}
 	return n.event, true
+}
+
+// SyntheticEvent returns the delivered event, or a synthetic Event of type
+// [TypeResyncRequired] when [Notification.IsResyncRequired] is true.
+func (n Notification) SyntheticEvent() Event {
+	if n.resync {
+		return newEvent(
+			ID(fmt.Sprintf("resync-%06d", n.resyncTo)),
+			TypeResyncRequired,
+			"",
+			0,
+			n.resyncTo,
+			NewTimestamp(time.Now()),
+			Metadata{},
+		)
+	}
+	return n.event
 }
 
 // Revision returns the revision the notification refers to: the event revision
@@ -88,6 +106,7 @@ type Subscription struct {
 	mu            sync.Mutex
 	notifications chan Notification
 	closed        bool
+	dropOldest    bool
 	resync        bool
 	resyncTo      Revision
 	delivered     uint64
@@ -95,12 +114,29 @@ type Subscription struct {
 	doneCh        chan struct{}
 }
 
-func newSubscription(publisher *Publisher, buffer int) *Subscription {
-	return &Subscription{
+// SubscriptionOption configures a subscription.
+type SubscriptionOption func(*Subscription)
+
+// WithDropOldest configures the subscription to drop the oldest queued notifications
+// when the buffer is full, rather than dropping new events.
+func WithDropOldest() SubscriptionOption {
+	return func(s *Subscription) {
+		s.dropOldest = true
+	}
+}
+
+func newSubscription(publisher *Publisher, buffer int, opts ...SubscriptionOption) *Subscription {
+	s := &Subscription{
 		publisher:     publisher,
 		notifications: make(chan Notification, buffer),
 		doneCh:        make(chan struct{}),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
 }
 
 // deliver offers an event to the subscription without blocking. It is called by
@@ -109,6 +145,30 @@ func (s *Subscription) deliver(event Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
+		return
+	}
+	if s.dropOldest {
+		select {
+		case s.notifications <- Notification{event: event}:
+			s.delivered++
+		default:
+			// Buffer full: drop oldest notification to make room for newest.
+			select {
+			case <-s.notifications:
+				s.dropped++
+			default:
+			}
+			s.resync = true
+			if event.rev > s.resyncTo {
+				s.resyncTo = event.rev
+			}
+			select {
+			case s.notifications <- Notification{event: event}:
+				s.delivered++
+			default:
+				s.dropped++
+			}
+		}
 		return
 	}
 	if s.resync {

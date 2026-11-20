@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
@@ -37,6 +38,11 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (OpenResult, error)
 	current, err := s.require(req.Ref)
 	if err != nil {
 		return OpenResult{}, err
+	}
+	if current.Orphaned() {
+		return OpenResult{}, session.NewError(session.CodeSessionIOFailed, string(current.ID),
+			fmt.Sprintf("no PTY handle for attempt %d: the process survived an owner crash but lost its controlling terminal", current.Generation),
+			"inspect, stop, kill, or restart the session; asd cannot reattach a lost PTY without a daemon")
 	}
 	now := s.now()
 	attachEvent := session.Event{
@@ -86,13 +92,21 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (OpenResult, error)
 		s.rememberLease(current.ID, current.Generation, heldLease{lease: lease, subscription: subscription})
 	}
 
-	revision, err := s.commit(ctx)
-	if err != nil {
-		if rollbackErr := s.rollbackOpen(ctx, current, lease, subscription); rollbackErr != nil {
+	if err := ctx.Err(); err != nil {
+		if rollbackErr := s.rollbackOpen(context.Background(), current, lease, subscription); rollbackErr != nil {
 			return OpenResult{}, rollbackErr
 		}
 		return OpenResult{}, err
 	}
+
+	revision, releaseCommit, err := s.commit(ctx)
+	if err != nil {
+		if rollbackErr := s.rollbackOpen(context.Background(), current, lease, subscription); rollbackErr != nil {
+			return OpenResult{}, rollbackErr
+		}
+		return OpenResult{}, err
+	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return OpenResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -131,7 +145,7 @@ func (s *Service) rollbackOpen(ctx context.Context, current session.Session, lea
 			failures = append(failures, fmt.Errorf("close the terminal stream: %w", err))
 		}
 	}
-	if err := s.leases.Release(ctx, lease); err != nil {
+	if err := s.leases.Release(context.Background(), lease); err != nil {
 		failures = append(failures, fmt.Errorf("release the interactive lease: %w", err))
 	}
 	if len(failures) > 0 {
@@ -200,10 +214,11 @@ func (s *Service) Detach(ctx context.Context, req DetachRequest) (DetachResult, 
 	if _, err := s.apply(current.ID, detachEvent); err != nil {
 		return DetachResult{}, err
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return DetachResult{}, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return DetachResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -435,10 +450,11 @@ func (s *Service) Kill(ctx context.Context, req KillRequest) (KillResult, error)
 	if _, err := s.apply(current.ID, killEvent); err != nil {
 		return KillResult{}, err
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return KillResult{Signal: session.SignalKill}, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return KillResult{Signal: session.SignalKill}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -497,6 +513,48 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 	if !hasAttempt {
 		return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
 			"the session has no attempt to restart", "start the session first, then restart it")
+	}
+
+	// Idempotency check across duplicate requests or IPC retries:
+	s.recentRestartsMu.Lock()
+	recent, hasRecent := s.recentRestarts[current.ID]
+	s.recentRestartsMu.Unlock()
+
+	if hasRecent && !attempt.Lifecycle.Terminal() {
+		isTargetMatch := req.TargetGeneration > 0 && req.TargetGeneration == recent.previousGeneration && current.Generation == recent.previousGeneration+1
+		isRecentDuplicate := req.TargetGeneration == 0 && time.Since(recent.at) < 5*time.Second && current.Generation == recent.previousGeneration+1
+		if isTargetMatch || isRecentDuplicate {
+			row, found := s.rowOf(current.ID)
+			if !found {
+				return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
+					"the session disappeared while it was restarting", "list the sessions to see what is stored")
+			}
+			return RestartResult{
+				Session:            row,
+				PreviousGeneration: recent.previousGeneration,
+				Revision:           recent.revision,
+				Event:              recent.event,
+			}, nil
+		}
+	}
+	if req.TargetGeneration > 0 {
+		if req.TargetGeneration > current.Generation {
+			return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
+				fmt.Sprintf("target generation %d is ahead of current generation %d", req.TargetGeneration, current.Generation),
+				"read the session state before restarting").ForAttempt(req.TargetGeneration)
+		}
+		if req.TargetGeneration < current.Generation && !attempt.Lifecycle.Terminal() {
+			row, found := s.rowOf(current.ID)
+			if !found {
+				return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
+					"the session disappeared while it was restarting", "list the sessions to see what is stored")
+			}
+			return RestartResult{
+				Session:            row,
+				PreviousGeneration: current.Generation - 1,
+				Revision:           s.Revision(),
+			}, nil
+		}
 	}
 	if current.Orphaned() {
 		return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
@@ -604,10 +662,11 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 		return RestartResult{}, err
 	}
 
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
-		return RestartResult{}, s.cleanupAfterPersistFailure(ctx, current.ID, launchReq.Generation, identity, err)
+		return RestartResult{}, s.cleanupAfterPersistFailure(context.Background(), current.ID, launchReq.Generation, identity, err)
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -617,6 +676,14 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 	if perr != nil {
 		return RestartResult{Session: row, PreviousGeneration: current.Generation, Revision: revision}, perr
 	}
+	s.recentRestartsMu.Lock()
+	s.recentRestarts[current.ID] = recentRestart{
+		previousGeneration: current.Generation,
+		revision:           revision,
+		event:              event,
+		at:                 time.Now(),
+	}
+	s.recentRestartsMu.Unlock()
 	return RestartResult{Session: row, PreviousGeneration: current.Generation, Revision: revision, Event: event}, nil
 }
 
@@ -688,10 +755,11 @@ func (s *Service) failRestart(ctx context.Context, id session.ID, generation ses
 	}); err != nil {
 		return RestartResult{}, err
 	}
-	revision, commitErr := s.commit(ctx)
+	revision, releaseCommit, commitErr := s.commit(ctx)
 	if commitErr != nil {
 		return RestartResult{}, commitErr
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(id)
 	if !found {
 		return RestartResult{}, session.NewError(session.CodeNotFound, string(id),
@@ -751,10 +819,11 @@ func (s *Service) Report(ctx context.Context, req ReportRequest) (ReportResult, 
 	if err != nil {
 		return s.staleOrError(current, err)
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return ReportResult{}, err
 	}
+	defer releaseCommit()
 	updated, found := s.engine.Get(current.ID)
 	if !found {
 		return ReportResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -946,10 +1015,11 @@ func leaseError(current session.Session, reason string, cause error) error {
 
 // commitAndRow writes the committed mutation and announces it.
 func (s *Service) commitAndRow(ctx context.Context, id session.ID, typ events.Type, transition string, stopTimedOut bool) (session.SessionSnapshot, uint64, error) {
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return session.SessionSnapshot{}, 0, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(id)
 	if !found {
 		return session.SessionSnapshot{}, revision, session.NewError(session.CodeNotFound, string(id),

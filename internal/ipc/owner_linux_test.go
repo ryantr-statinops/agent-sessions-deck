@@ -53,6 +53,53 @@ func TestBootstrapTakesLifetimeLockBeforeBindingSocket(t *testing.T) {
 	}
 }
 
+func TestInstanceFencedLockRelease(t *testing.T) {
+	root := t.TempDir()
+	paths := config.Paths{StateDir: filepath.Join(root, "state")}
+	socket := filepath.Join(root, "runtime", "control.sock")
+
+	owner, err := Bootstrap(paths, socket)
+	if err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+
+	token, err := owner.lock.ReadToken()
+	if err != nil {
+		t.Fatalf("read lock token: %v", err)
+	}
+	if token == "" || !containsStr(token, owner.InstanceID()) {
+		t.Fatalf("lock token %q does not contain instance ID %q", token, owner.InstanceID())
+	}
+
+	// Case 1: Token mismatch -> Close() must NOT delete socket
+	_ = owner.lock.WriteToken("foreign-instance-id pid=99999")
+	if err := owner.Close(); err != nil {
+		t.Fatalf("owner close: %v", err)
+	}
+	if _, err := os.Stat(socket); err != nil {
+		t.Fatalf("socket was deleted despite instance token mismatch: %v", err)
+	}
+
+	// Clean up socket for next test
+	_ = os.Remove(socket)
+
+	// Case 2: Matching token -> Close() deletes socket
+	owner2, err := Bootstrap(paths, socket)
+	if err != nil {
+		t.Fatalf("bootstrap owner2: %v", err)
+	}
+	if err := owner2.Close(); err != nil {
+		t.Fatalf("owner2 close: %v", err)
+	}
+	if _, err := os.Stat(socket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected socket to be deleted on matching instance close, got err = %v", err)
+	}
+}
+
+func containsStr(s, substr string) bool {
+	return filepath.Base(s) != "" && (s == substr || len(s) >= len(substr) && s[:len(substr)] == substr)
+}
+
 func TestBootstrapReleasesLockWhenSocketBindFails(t *testing.T) {
 	root := t.TempDir()
 	paths := config.Paths{StateDir: filepath.Join(root, "state")}

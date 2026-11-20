@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	termview "github.com/ryantr-statinops/agent-sessions-deck/internal/tui/terminal"
@@ -246,6 +247,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusErr = false
 		}
 		return m, nil
+
+	case ResyncMsg:
+		seq := m.NextSeq()
+		return m, m.loadSessionsCmd(seq)
+
+	case events.Notification:
+		seq := m.NextSeq()
+		return m, m.loadSessionsCmd(seq)
+
+	case events.Event:
+		seq := m.NextSeq()
+		return m, m.loadSessionsCmd(seq)
 
 	case TerminalFrameMsg:
 		if msg.SessionID != m.activeSessionID || m.mode != ViewTerminal {

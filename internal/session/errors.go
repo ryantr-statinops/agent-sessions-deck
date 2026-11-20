@@ -96,12 +96,12 @@ type Error struct {
 
 // NewError builds a typed error.
 func NewError(code Code, subject, reason, hint string) *Error {
-	return &Error{Code: code, Subject: subject, Reason: reason, Hint: hint}
+	return &Error{Code: code, Subject: subject, Reason: Sanitize(reason), Hint: Sanitize(hint)}
 }
 
 // WrapError builds a typed error around a cause.
 func WrapError(code Code, subject, reason, hint string, err error) *Error {
-	return &Error{Code: code, Subject: subject, Reason: reason, Hint: hint, Err: err}
+	return &Error{Code: code, Subject: subject, Reason: Sanitize(reason), Hint: Sanitize(hint), Err: err}
 }
 
 // ForAttempt records the attempt generation on the error.
@@ -130,7 +130,7 @@ func (e *Error) Error() string {
 	}
 	if e.Err != nil {
 		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		b.WriteString(Sanitize(e.Err.Error()))
 	}
 	if e.Hint != "" {
 		b.WriteString(" (hint: ")

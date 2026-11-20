@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,28 @@ func TestOpenReportsUnavailableIOAndLeavesTheProcessUntouched(t *testing.T) {
 	}
 }
 
+func TestOpenOrphanRefusedWithIOFailed(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	if _, err := h.svc.Report(context.Background(), ReportRequest{
+		Ref:  string(created.Session.ID),
+		Kind: ReportPTYLost,
+		Liveness: session.LivenessObservation{
+			Outcome:  session.ProbeAlive,
+			Identity: testIdentity(4242),
+			At:       baseTime,
+		},
+	}); err != nil {
+		t.Fatalf("Report pty-lost: %v", err)
+	}
+
+	_, err := h.svc.Open(context.Background(), OpenRequest{Ref: string(created.Session.ID), Holder: "cli-test"})
+	typed := requireCode(t, err, session.CodeSessionIOFailed)
+	if !strings.Contains(typed.Hint, "inspect, stop, kill, or restart") {
+		t.Fatalf("expected clear orphan guidance hint, got %q", typed.Hint)
+	}
+}
+
 func TestOpenReportsUnavailableIOWhenTheStreamCannotBeHandedOut(t *testing.T) {
 	h := newHarness(t)
 	created := h.createRunning(t)
@@ -101,6 +124,31 @@ func TestOpenReportsUnavailableIOWhenTheStreamCannotBeHandedOut(t *testing.T) {
 	}
 	if live.Session.Attachment != session.AttachmentDetached {
 		t.Fatalf("attachment = %s, want the rollback to detached", live.Session.Attachment)
+	}
+}
+
+func TestOpenRollsBackOnContextCancellationBeforeCommit(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	id := string(created.Session.ID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := h.svc.Open(ctx, OpenRequest{Ref: id, Holder: "cli"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Open err = %v, want context.Canceled", err)
+	}
+
+	live, err := h.svc.Get(context.Background(), GetRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if live.Session.Attachment != session.AttachmentDetached {
+		t.Fatalf("attachment = %s, want detached after rollback", live.Session.Attachment)
+	}
+	if holder, held := h.broker.holder(created.Session.ID); held {
+		t.Fatalf("lease is still held by %s after rollback", holder)
 	}
 }
 
@@ -481,6 +529,64 @@ func TestForcedRestartLeavesTheOldAttemptRunningWhenTheStopTimesOut(t *testing.T
 	}
 }
 
+func TestRestartIdempotencyDeduplicatesRepeatedRequests(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	id := string(created.Session.ID)
+
+	if _, err := h.svc.Kill(context.Background(), KillRequest{Ref: id}); err != nil {
+		t.Fatalf("Kill: %v", err)
+	}
+
+	// First restart advances session from Generation 1 to Generation 2.
+	res1, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("First restart failed: %v", err)
+	}
+	if res1.Session.Generation != 2 {
+		t.Fatalf("generation = %d, want 2", res1.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (create + first restart)", launches)
+	}
+
+	// Duplicate/retry request without Force should succeed idempotently and NOT fail with conflict.
+	res2, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("Duplicate restart failed: %v", err)
+	}
+	if res2.Session.Generation != 2 {
+		t.Fatalf("duplicate generation = %d, want 2", res2.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (duplicate must not spawn a new attempt)", launches)
+	}
+
+	// Retry with explicit TargetGeneration matching previous generation.
+	res3, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id, TargetGeneration: 1})
+	if err != nil {
+		t.Fatalf("Retry with TargetGeneration failed: %v", err)
+	}
+	if res3.Session.Generation != 2 {
+		t.Fatalf("TargetGeneration retry generation = %d, want 2", res3.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (TargetGeneration must not spawn)", launches)
+	}
+
+	// Duplicate with Force: true within deduplication window should NOT kill attempt 2 and spawn attempt 3.
+	res4, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id, Force: true})
+	if err != nil {
+		t.Fatalf("Forced duplicate restart failed: %v", err)
+	}
+	if res4.Session.Generation != 2 {
+		t.Fatalf("forced duplicate generation = %d, want 2 (must not advance to 3)", res4.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2", launches)
+	}
+}
+
 func TestStaleCallbackFromAnOlderAttemptIsReportedNotRaised(t *testing.T) {
 	h := newHarness(t)
 	created := h.createRunning(t)
@@ -517,6 +623,85 @@ func TestStaleCallbackFromAnOlderAttemptIsReportedNotRaised(t *testing.T) {
 	}
 	if h.svc.Revision() != restarted.Revision {
 		t.Fatalf("revision = %d, want the unchanged %d", h.svc.Revision(), restarted.Revision)
+	}
+}
+
+func TestStaleProbeEventsFromOlderAttemptAreFenced(t *testing.T) {
+	staleKinds := []struct {
+		name string
+		req  ReportRequest
+	}{
+		{
+			name: "stale pty lost",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportPTYLost,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeGone,
+					Detail:  "lost pty",
+					At:      baseTime,
+				},
+			},
+		},
+		{
+			name: "stale probe inconclusive",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportProbeInconclusive,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeUnverifiable,
+					Detail:  "permission-denied",
+					At:      baseTime,
+				},
+			},
+		},
+		{
+			name: "stale reconciled gone",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportReconciled,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeGone,
+					Detail:  "process gone",
+					At:      baseTime,
+				},
+			},
+		},
+	}
+
+	for _, tc := range staleKinds {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			created := h.createRunning(t)
+			if _, err := h.svc.Kill(context.Background(), KillRequest{Ref: string(created.Session.ID)}); err != nil {
+				t.Fatalf("Kill: %v", err)
+			}
+			restarted, err := h.svc.Restart(context.Background(), RestartRequest{Ref: string(created.Session.ID)})
+			if err != nil {
+				t.Fatalf("Restart: %v", err)
+			}
+			publishedBefore := len(h.capture.all())
+
+			req := tc.req
+			req.Ref = string(created.Session.ID)
+
+			result, err := h.svc.Report(context.Background(), req)
+			if err != nil {
+				t.Fatalf("a stale probe callback must not be an error: %v", err)
+			}
+			if !result.Stale || result.Row != session.RowStaleCallback {
+				t.Fatalf("result = %+v, want stale callback", result)
+			}
+			if result.Session.Lifecycle != session.LifecycleRunning || result.Session.Generation != 2 {
+				t.Fatalf("stale callback corrupted running session: %+v", result.Session)
+			}
+			if len(h.capture.all()) != publishedBefore {
+				t.Fatalf("stale probe callback published an event")
+			}
+			if h.svc.Revision() != restarted.Revision {
+				t.Fatalf("revision = %d, want unchanged %d", h.svc.Revision(), restarted.Revision)
+			}
+		})
 	}
 }
 
@@ -741,6 +926,23 @@ func TestRestartRefusesAnOrphanedSession(t *testing.T) {
 	}
 	if h.runtime.launchCount() != 1 {
 		t.Fatal("a refused orphan restart spawned a second attempt")
+	}
+
+	// Explicit kill of the surviving orphan frees the session for restart
+	_, killErr := h.svc.Kill(context.Background(), KillRequest{Ref: string(created.Session.ID), Signal: session.SignalKill})
+	if killErr != nil {
+		t.Fatalf("Kill surviving orphan: %v", killErr)
+	}
+
+	restarted, err := h.svc.Restart(context.Background(), RestartRequest{Ref: string(created.Session.ID)})
+	if err != nil {
+		t.Fatalf("Restart after kill: %v", err)
+	}
+	if restarted.Session.Generation != 2 {
+		t.Fatalf("expected generation 2, got %d", restarted.Session.Generation)
+	}
+	if h.runtime.launchCount() != 2 {
+		t.Fatalf("expected 2 launches, got %d", h.runtime.launchCount())
 	}
 }
 

@@ -278,3 +278,94 @@ func TestConcurrentStopsOnTheSameSessionProduceOneWinner(t *testing.T) {
 		t.Fatalf("lifecycle = %s, want exited", attempt.Lifecycle)
 	}
 }
+
+func TestConcurrentMutationsOnDistinctSessionsProceedInParallel(t *testing.T) {
+	h := newHarness(t)
+	created1 := h.createRunning(t)
+	id1 := string(created1.Session.ID)
+
+	created2, err := h.svc.Create(context.Background(), CreateRequest{
+		Agent:         "opencode",
+		WorkspacePath: testWorkspace,
+		Name:          "session-2",
+	})
+	if err != nil {
+		t.Fatalf("Create second session: %v", err)
+	}
+	id2 := string(created2.Session.ID)
+
+	h.runtime.stop = session.StopOutcome{Exited: true, ExitCode: intPtr(0)}
+
+	insideStop1 := make(chan struct{})
+	releaseStop1 := make(chan struct{})
+	h.runtime.stopHook = func() {
+		close(insideStop1)
+		<-releaseStop1
+	}
+
+	stop1Done := make(chan error, 1)
+	go func() {
+		_, err := h.svc.Stop(context.Background(), StopRequest{Ref: id1})
+		stop1Done <- err
+	}()
+
+	// Wait until session 1 has entered stop and is holding its session lock.
+	<-insideStop1
+
+	// Mutation on session 2 MUST proceed and complete while session 1 is blocked.
+	rename2Done := make(chan error, 1)
+	go func() {
+		_, err := h.svc.Rename(context.Background(), RenameRequest{Ref: id2, Name: "renamed-in-parallel"})
+		rename2Done <- err
+	}()
+
+	select {
+	case err := <-rename2Done:
+		if err != nil {
+			t.Fatalf("Rename on session 2 failed: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Rename on session 2 was blocked by mutation on session 1")
+	}
+
+	// Verify that a second mutation on session 1 DOES block until session 1's stop finishes.
+	rename1Done := make(chan error, 1)
+	go func() {
+		_, err := h.svc.Rename(context.Background(), RenameRequest{Ref: id1, Name: "blocked-rename"})
+		rename1Done <- err
+	}()
+
+	select {
+	case <-rename1Done:
+		t.Fatal("Rename on session 1 proceeded while stop on session 1 was still in progress")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: session 1 lock is held by stop.
+	}
+
+	// Unblock session 1 stop.
+	close(releaseStop1)
+
+	if err := <-stop1Done; err != nil {
+		t.Fatalf("Stop 1 failed: %v", err)
+	}
+	if err := <-rename1Done; err != nil {
+		t.Fatalf("Rename 1 failed: %v", err)
+	}
+
+	// Verify both sessions reached expected state.
+	s1, err := h.svc.Get(context.Background(), GetRequest{Ref: id1})
+	if err != nil {
+		t.Fatalf("Get 1: %v", err)
+	}
+	if s1.Session.Name != "blocked-rename" {
+		t.Fatalf("s1 name = %q, want blocked-rename", s1.Session.Name)
+	}
+
+	s2, err := h.svc.Get(context.Background(), GetRequest{Ref: id2})
+	if err != nil {
+		t.Fatalf("Get 2: %v", err)
+	}
+	if s2.Session.Name != "renamed-in-parallel" {
+		t.Fatalf("s2 name = %q, want renamed-in-parallel", s2.Session.Name)
+	}
+}

@@ -37,6 +37,9 @@ func (r *Runtime) InstanceID() string { return r.claim.InstanceID() }
 // Client exposes the in-process application client to the command that bootstrapped this owner.
 func (r *Runtime) Client() app.Client { return r.app }
 
+// Service returns the underlying application service.
+func (r *Runtime) Service() *app.Service { return r.app }
+
 // Close releases an owner that failed before its server entered Serve.
 func (r *Runtime) Close() error { return r.claim.Close() }
 
@@ -51,6 +54,10 @@ func Start(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime
 	}
 	service, err := buildService(ctx, paths, cfg, claim.SessionsStore(paths.SessionsFile()), claim.InstanceID(), session.AuthorityLive)
 	if err != nil {
+		_ = claim.Close()
+		return nil, err
+	}
+	if _, err := service.ReconcileStartup(ctx); err != nil {
 		_ = claim.Close()
 		return nil, err
 	}

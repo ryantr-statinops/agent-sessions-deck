@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
 )
 
 // ScanResultMsg delivers asynchronous agent probe results.
@@ -63,4 +64,9 @@ type SessionOpenResultMsg struct {
 	SessionID string
 	Result    app.OpenResult
 	Err       error
+}
+
+// ResyncMsg signals that the event stream overflowed or requested a state resynchronization.
+type ResyncMsg struct {
+	Revision events.Revision
 }

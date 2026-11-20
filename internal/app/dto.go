@@ -302,6 +302,10 @@ type RestartRequest struct {
 	// refused, because restarting one interrupts work in progress. Forcing does
 	// not skip identity verification.
 	Force bool
+	// TargetGeneration optionally pins the expected generation before restart.
+	// If the session has already advanced past TargetGeneration and is active,
+	// the restart is treated as an idempotent retry and returns the existing attempt.
+	TargetGeneration session.Generation
 }
 
 // Validate checks the request.
