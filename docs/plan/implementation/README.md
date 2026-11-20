@@ -39,7 +39,7 @@ Giữ Stage 00–02 cùng report/evidence đã hoàn tất. Từ Stage 03 trở 
 | 06 | [Foreground IPC và CLI](06-foreground-ipc-and-cli.md) | 03, 04, 05 | Toàn bộ CLI V1, single owner | L |
 | 07 | [TUI launcher và session dashboard](07-tui-launcher-and-dashboard.md) | 06 | TUI launch/list/search/filter/actions | M |
 | 08 | [Interactive terminal view](08-interactive-terminal-view.md) | 05, 06, 07 | Tương tác nhiều session đúng terminal | L |
-| 09 | [Recovery và lifecycle hardening](09-recovery-and-lifecycle-hardening.md) | 06, 08 | Crash/quit/orphan/concurrency an toàn | L |
+| 09 | [Recovery và lifecycle hardening](09-recovery-and-lifecycle-hardening.md) | 06, 08 | Crash/quit/orphan/concurrency an toàn ([báo cáo](reports/stage-09.md)) | L |
 | 10 | [V1 acceptance và release](10-v1-acceptance-and-release.md) | 04, 07, 08, 09 | Artifact Linux + hướng dẫn + evidence | M |
 | 11 | [V2 daemon và client migration](11-v2-daemon-and-client-migration.md) | 10 | Session sống khi TUI đóng | L |
 | 12 | [V2 workspace và observability](12-v2-workspaces-and-observability.md) | 11 | Dashboard workspace và metrics | M |

@@ -369,4 +369,3 @@ func TestConcurrentMutationsOnDistinctSessionsProceedInParallel(t *testing.T) {
 		t.Fatalf("s2 name = %q, want renamed-in-parallel", s2.Session.Name)
 	}
 }
-

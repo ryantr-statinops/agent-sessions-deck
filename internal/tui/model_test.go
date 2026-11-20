@@ -393,4 +393,3 @@ func TestModelHandlesResyncMsgByReloadingSessions(t *testing.T) {
 		t.Fatal("expected non-nil reload cmd from notification")
 	}
 }
-
