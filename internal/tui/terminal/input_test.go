@@ -40,3 +40,38 @@ func TestEncodeKeyBasicAndControl(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeKeyNavigationAndEditing(t *testing.T) {
+	tests := []struct {
+		name          string
+		msg           tea.KeyMsg
+		appCursorKeys bool
+		expected      []byte
+	}{
+		{"Up Normal", tea.KeyMsg{Type: tea.KeyUp}, false, []byte("\x1b[A")},
+		{"Up App", tea.KeyMsg{Type: tea.KeyUp}, true, []byte("\x1bOA")},
+		{"Down Normal", tea.KeyMsg{Type: tea.KeyDown}, false, []byte("\x1b[B")},
+		{"Down App", tea.KeyMsg{Type: tea.KeyDown}, true, []byte("\x1bOB")},
+		{"Right Normal", tea.KeyMsg{Type: tea.KeyRight}, false, []byte("\x1b[C")},
+		{"Right App", tea.KeyMsg{Type: tea.KeyRight}, true, []byte("\x1bOC")},
+		{"Left Normal", tea.KeyMsg{Type: tea.KeyLeft}, false, []byte("\x1b[D")},
+		{"Left App", tea.KeyMsg{Type: tea.KeyLeft}, true, []byte("\x1bOD")},
+		{"Shift+Tab", tea.KeyMsg{Type: tea.KeyShiftTab}, false, []byte("\x1b[Z")},
+		{"Home", tea.KeyMsg{Type: tea.KeyHome}, false, []byte("\x1b[H")},
+		{"End", tea.KeyMsg{Type: tea.KeyEnd}, false, []byte("\x1b[F")},
+		{"PgUp", tea.KeyMsg{Type: tea.KeyPgUp}, false, []byte("\x1b[5~")},
+		{"PgDown", tea.KeyMsg{Type: tea.KeyPgDown}, false, []byte("\x1b[6~")},
+		{"Insert", tea.KeyMsg{Type: tea.KeyInsert}, false, []byte("\x1b[2~")},
+		{"Delete", tea.KeyMsg{Type: tea.KeyDelete}, false, []byte("\x1b[3~")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mode := InputMode{AppCursorKeys: tc.appCursorKeys}
+			got := EncodeKey(tc.msg, mode)
+			if !bytes.Equal(got, tc.expected) {
+				t.Fatalf("EncodeKey(%v) = %q, want %q", tc.msg, got, tc.expected)
+			}
+		})
+	}
+}

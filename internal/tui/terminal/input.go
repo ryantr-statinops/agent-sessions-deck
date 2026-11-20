@@ -15,6 +15,44 @@ type InputMode struct {
 // EncodeKey translates a Bubble Tea tea.KeyMsg into raw VT byte sequences
 // destined for a child PTY.
 func EncodeKey(msg tea.KeyMsg, mode InputMode) []byte {
+	// Handle navigation and editing keys
+	switch msg.Type {
+	case tea.KeyUp:
+		if mode.AppCursorKeys {
+			return []byte("\x1bOA")
+		}
+		return []byte("\x1b[A")
+	case tea.KeyDown:
+		if mode.AppCursorKeys {
+			return []byte("\x1bOB")
+		}
+		return []byte("\x1b[B")
+	case tea.KeyRight:
+		if mode.AppCursorKeys {
+			return []byte("\x1bOC")
+		}
+		return []byte("\x1b[C")
+	case tea.KeyLeft:
+		if mode.AppCursorKeys {
+			return []byte("\x1bOD")
+		}
+		return []byte("\x1b[D")
+	case tea.KeyShiftTab:
+		return []byte("\x1b[Z")
+	case tea.KeyHome:
+		return []byte("\x1b[H")
+	case tea.KeyEnd:
+		return []byte("\x1b[F")
+	case tea.KeyPgUp:
+		return []byte("\x1b[5~")
+	case tea.KeyPgDown:
+		return []byte("\x1b[6~")
+	case tea.KeyInsert:
+		return []byte("\x1b[2~")
+	case tea.KeyDelete:
+		return []byte("\x1b[3~")
+	}
+
 	// Handle control keys and ASCII
 	switch msg.Type {
 	case tea.KeyCtrlAt:
