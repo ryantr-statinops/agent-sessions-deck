@@ -56,8 +56,27 @@ func (p *PrefixMachine) ProcessKey(msg tea.KeyMsg) PrefixResult {
 		return PrefixResult{Handled: false, Action: ActionNone}
 	}
 
-	// Machine is pending: handled in next commit
-	return PrefixResult{Handled: false, Action: ActionNone}
+	// Machine is pending an action key
+	p.pending = false
+
+	if isPrefixKey(msg) {
+		// Ctrl+] pressed twice sends literal 0x1D
+		return PrefixResult{Handled: true, Action: ActionSendLiteral, LiteralByte: 0x1D}
+	}
+
+	switch msg.String() {
+	case "s", "S":
+		return PrefixResult{Handled: true, Action: ActionDetach}
+	case "n", "N":
+		return PrefixResult{Handled: true, Action: ActionNew}
+	case "?":
+		return PrefixResult{Handled: true, Action: ActionHelp}
+	case "[":
+		return PrefixResult{Handled: true, Action: ActionScroll}
+	default:
+		// Unknown key after prefix: cancel pending state and pass through key to PTY
+		return PrefixResult{Handled: false, Action: ActionNone}
+	}
 }
 
 func isPrefixKey(msg tea.KeyMsg) bool {
