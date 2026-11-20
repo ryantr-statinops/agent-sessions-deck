@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Notification is one delivery to a subscriber: either a metadata event or a
@@ -33,6 +34,23 @@ func (n Notification) Event() (Event, bool) {
 		return Event{}, false
 	}
 	return n.event, true
+}
+
+// SyntheticEvent returns the delivered event, or a synthetic Event of type
+// [TypeResyncRequired] when [Notification.IsResyncRequired] is true.
+func (n Notification) SyntheticEvent() Event {
+	if n.resync {
+		return newEvent(
+			ID(fmt.Sprintf("resync-%06d", n.resyncTo)),
+			TypeResyncRequired,
+			"",
+			0,
+			n.resyncTo,
+			NewTimestamp(time.Now()),
+			Metadata{},
+		)
+	}
+	return n.event
 }
 
 // Revision returns the revision the notification refers to: the event revision

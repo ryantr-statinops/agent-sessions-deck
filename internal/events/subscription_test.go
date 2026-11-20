@@ -54,6 +54,32 @@ func TestOverflowDropsAndMarksResyncRequired(t *testing.T) {
 	}
 }
 
+func TestSyntheticResyncEventOnOverflow(t *testing.T) {
+	publisher := newTestPublisher(t)
+	sub := mustSubscribe(t, publisher, 2)
+	defer sub.Close()
+
+	publishCount(t, publisher, 5)
+
+	// Drain the 2 buffered events
+	_ = recvWithin(t, sub)
+	_ = recvWithin(t, sub)
+
+	// The third notification is the resync marker
+	marker := recvWithin(t, sub)
+	if !marker.IsResyncRequired() {
+		t.Fatalf("expected resync required, got %v", marker)
+	}
+
+	synth := marker.SyntheticEvent()
+	if synth.Type() != TypeResyncRequired {
+		t.Fatalf("SyntheticEvent type = %s, want %s", synth.Type(), TypeResyncRequired)
+	}
+	if synth.Revision() != 5 {
+		t.Fatalf("SyntheticEvent revision = %d, want 5", synth.Revision())
+	}
+}
+
 func TestDropOldestPolicyOnOverflow(t *testing.T) {
 	publisher := newTestPublisher(t)
 	sub, err := publisher.Subscribe(context.Background(), 2, WithDropOldest())
