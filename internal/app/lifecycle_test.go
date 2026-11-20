@@ -543,6 +543,85 @@ func TestStaleCallbackFromAnOlderAttemptIsReportedNotRaised(t *testing.T) {
 	}
 }
 
+func TestStaleProbeEventsFromOlderAttemptAreFenced(t *testing.T) {
+	staleKinds := []struct {
+		name string
+		req  ReportRequest
+	}{
+		{
+			name: "stale pty lost",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportPTYLost,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeGone,
+					Detail:  "lost pty",
+					At:      baseTime,
+				},
+			},
+		},
+		{
+			name: "stale probe inconclusive",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportProbeInconclusive,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeUnverifiable,
+					Detail:  "permission-denied",
+					At:      baseTime,
+				},
+			},
+		},
+		{
+			name: "stale reconciled gone",
+			req: ReportRequest{
+				Attempt: 1,
+				Kind:    ReportReconciled,
+				Liveness: session.LivenessObservation{
+					Outcome: session.ProbeGone,
+					Detail:  "process gone",
+					At:      baseTime,
+				},
+			},
+		},
+	}
+
+	for _, tc := range staleKinds {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			created := h.createRunning(t)
+			if _, err := h.svc.Kill(context.Background(), KillRequest{Ref: string(created.Session.ID)}); err != nil {
+				t.Fatalf("Kill: %v", err)
+			}
+			restarted, err := h.svc.Restart(context.Background(), RestartRequest{Ref: string(created.Session.ID)})
+			if err != nil {
+				t.Fatalf("Restart: %v", err)
+			}
+			publishedBefore := len(h.capture.all())
+
+			req := tc.req
+			req.Ref = string(created.Session.ID)
+
+			result, err := h.svc.Report(context.Background(), req)
+			if err != nil {
+				t.Fatalf("a stale probe callback must not be an error: %v", err)
+			}
+			if !result.Stale || result.Row != session.RowStaleCallback {
+				t.Fatalf("result = %+v, want stale callback", result)
+			}
+			if result.Session.Lifecycle != session.LifecycleRunning || result.Session.Generation != 2 {
+				t.Fatalf("stale callback corrupted running session: %+v", result.Session)
+			}
+			if len(h.capture.all()) != publishedBefore {
+				t.Fatalf("stale probe callback published an event")
+			}
+			if h.svc.Revision() != restarted.Revision {
+				t.Fatalf("revision = %d, want unchanged %d", h.svc.Revision(), restarted.Revision)
+			}
+		})
+	}
+}
+
 func TestReportAppliesAnObservationForTheCurrentAttempt(t *testing.T) {
 	h := newHarness(t)
 	created := h.createRunning(t)
