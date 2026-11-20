@@ -765,6 +765,23 @@ func TestRestartRefusesAnOrphanedSession(t *testing.T) {
 	if h.runtime.launchCount() != 1 {
 		t.Fatal("a refused orphan restart spawned a second attempt")
 	}
+
+	// Explicit kill of the surviving orphan frees the session for restart
+	_, killErr := h.svc.Kill(context.Background(), KillRequest{Ref: string(created.Session.ID), Signal: session.SignalKill})
+	if killErr != nil {
+		t.Fatalf("Kill surviving orphan: %v", killErr)
+	}
+
+	restarted, err := h.svc.Restart(context.Background(), RestartRequest{Ref: string(created.Session.ID)})
+	if err != nil {
+		t.Fatalf("Restart after kill: %v", err)
+	}
+	if restarted.Session.Generation != 2 {
+		t.Fatalf("expected generation 2, got %d", restarted.Session.Generation)
+	}
+	if h.runtime.launchCount() != 2 {
+		t.Fatalf("expected 2 launches, got %d", h.runtime.launchCount())
+	}
 }
 
 func TestRestartRefusesASessionWithoutAnAttempt(t *testing.T) {
