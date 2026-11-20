@@ -76,6 +76,38 @@ func TestRemoveStaleSocketRequiresDefinitiveRefusal(t *testing.T) {
 	}
 }
 
+func TestStaleSocketAutomatedCleanupOnBootstrap(t *testing.T) {
+	root := t.TempDir()
+	paths := config.Paths{StateDir: filepath.Join(root, "state")}
+	socketPath := filepath.Join(root, "runtime", "control.sock")
+
+	// 1. Manually create a dangling socket on disk (as if process crashed)
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln.SetUnlinkOnClose(false)
+	_ = ln.Close() // Leaves stale socket file on disk
+
+	if _, err := os.Stat(socketPath); err != nil {
+		t.Fatalf("expected stale socket to exist on disk: %v", err)
+	}
+
+	// 2. Bootstrap must detect stale socket, remove it, and bind successfully
+	owner, err := Bootstrap(paths, socketPath)
+	if err != nil {
+		t.Fatalf("Bootstrap failed to recover stale socket: %v", err)
+	}
+	defer owner.Close()
+
+	if owner.Listener() == nil {
+		t.Fatal("expected active listener on recovered owner")
+	}
+}
+
 func TestVerifyPeerUIDAcceptsSameUserConnection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "peer.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
