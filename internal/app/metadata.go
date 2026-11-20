@@ -175,10 +175,11 @@ func (s *Service) Rename(ctx context.Context, req RenameRequest) (RenameResult, 
 	if err != nil {
 		return RenameResult{}, engineError(current.ID, "rename the session", err)
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return RenameResult{}, err
 	}
+	defer releaseCommit()
 	row := s.row(renamed, s.now())
 	event, perr := s.publish(revision, TypeSessionRenamed, row, s.now(), eventExtras{})
 	if perr != nil {
@@ -217,10 +218,11 @@ func (s *Service) Delete(ctx context.Context, req DeleteRequest) (DeleteResult, 
 	if err := current.EnsureDeletable(); err != nil {
 		return DeleteResult{}, err
 	}
-	revision, err := s.deletePersisted(ctx, current.ID)
+	revision, releaseCommit, err := s.deletePersisted(ctx, current.ID)
 	if err != nil {
 		return DeleteResult{}, err
 	}
+	defer releaseCommit()
 	// Re-read before the record is forgotten: the persisted write has already
 	// happened, so a refusal here means the store and memory disagree about this
 	// session and the operator has to know.

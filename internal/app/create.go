@@ -121,10 +121,11 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (CreateResult, 
 		return CreateResult{}, err
 	}
 
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return CreateResult{}, s.cleanupAfterPersistFailure(ctx, id, launchReq.Generation, identity, err)
 	}
+	defer releaseCommit()
 
 	current, found := s.engine.Get(id)
 	if !found {
@@ -153,10 +154,11 @@ func (s *Service) failLaunch(ctx context.Context, id session.ID, generation sess
 	}); err != nil {
 		return CreateResult{}, err
 	}
-	revision, commitErr := s.commit(ctx)
+	revision, releaseCommit, commitErr := s.commit(ctx)
 	if commitErr != nil {
 		return CreateResult{}, commitErr
 	}
+	defer releaseCommit()
 	current, found := s.engine.Get(id)
 	if !found {
 		return CreateResult{}, session.NewError(session.CodeNotFound, string(id),

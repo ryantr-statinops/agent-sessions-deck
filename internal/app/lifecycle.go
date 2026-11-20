@@ -91,13 +91,14 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (OpenResult, error)
 		s.rememberLease(current.ID, current.Generation, heldLease{lease: lease, subscription: subscription})
 	}
 
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		if rollbackErr := s.rollbackOpen(ctx, current, lease, subscription); rollbackErr != nil {
 			return OpenResult{}, rollbackErr
 		}
 		return OpenResult{}, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return OpenResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -205,10 +206,11 @@ func (s *Service) Detach(ctx context.Context, req DetachRequest) (DetachResult, 
 	if _, err := s.apply(current.ID, detachEvent); err != nil {
 		return DetachResult{}, err
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return DetachResult{}, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return DetachResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -440,10 +442,11 @@ func (s *Service) Kill(ctx context.Context, req KillRequest) (KillResult, error)
 	if _, err := s.apply(current.ID, killEvent); err != nil {
 		return KillResult{}, err
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return KillResult{Signal: session.SignalKill}, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return KillResult{Signal: session.SignalKill}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -609,10 +612,11 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 		return RestartResult{}, err
 	}
 
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return RestartResult{}, s.cleanupAfterPersistFailure(ctx, current.ID, launchReq.Generation, identity, err)
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(current.ID)
 	if !found {
 		return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -693,10 +697,11 @@ func (s *Service) failRestart(ctx context.Context, id session.ID, generation ses
 	}); err != nil {
 		return RestartResult{}, err
 	}
-	revision, commitErr := s.commit(ctx)
+	revision, releaseCommit, commitErr := s.commit(ctx)
 	if commitErr != nil {
 		return RestartResult{}, commitErr
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(id)
 	if !found {
 		return RestartResult{}, session.NewError(session.CodeNotFound, string(id),
@@ -756,10 +761,11 @@ func (s *Service) Report(ctx context.Context, req ReportRequest) (ReportResult, 
 	if err != nil {
 		return s.staleOrError(current, err)
 	}
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return ReportResult{}, err
 	}
+	defer releaseCommit()
 	updated, found := s.engine.Get(current.ID)
 	if !found {
 		return ReportResult{}, session.NewError(session.CodeNotFound, string(current.ID),
@@ -951,10 +957,11 @@ func leaseError(current session.Session, reason string, cause error) error {
 
 // commitAndRow writes the committed mutation and announces it.
 func (s *Service) commitAndRow(ctx context.Context, id session.ID, typ events.Type, transition string, stopTimedOut bool) (session.SessionSnapshot, uint64, error) {
-	revision, err := s.commit(ctx)
+	revision, releaseCommit, err := s.commit(ctx)
 	if err != nil {
 		return session.SessionSnapshot{}, 0, err
 	}
+	defer releaseCommit()
 	row, found := s.rowOf(id)
 	if !found {
 		return session.SessionSnapshot{}, revision, session.NewError(session.CodeNotFound, string(id),
