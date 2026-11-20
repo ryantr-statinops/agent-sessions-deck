@@ -136,6 +136,25 @@ func (m Model) loadAgentsCmd(seq AsyncSeq) tea.Cmd {
 	}
 }
 
+// openSessionCmd opens an interactive terminal stream to a session.
+func (m Model) openSessionCmd(sessionID string) tea.Cmd {
+	client := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		res, err := client.Open(ctx, app.OpenRequest{
+			Ref:    sessionID,
+			Holder: "tui-client",
+		})
+		return SessionOpenResultMsg{
+			SessionID: sessionID,
+			Result:    res,
+			Err:       err,
+		}
+	}
+}
+
 // Update handles incoming messages and events.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -224,6 +243,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.applyTerminalFrame(msg.Frame)
+		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
+
+	case SessionOpenResultMsg:
+		if msg.Err != nil {
+			m.setStatus("Failed to open session: "+msg.Err.Error(), true, 5*time.Second)
+			return m, nil
+		}
+		m.mode = ViewTerminal
+		m.activeSessionID = msg.SessionID
+		m.activeSub = msg.Result.Terminal
+		if msg.Result.Terminal != nil {
+			m.terminalScreen = msg.Result.Terminal.InitialSnapshot().Screen
+		}
+		m.terminalExited = false
+		m.terminalExitErr = nil
+		if m.terminalPrefix != nil {
+			m.terminalPrefix.Reset()
+		}
+		if m.terminalScroll != nil {
+			m.terminalScroll.SetAlternateScreen(m.terminalScreen.AlternateScreen)
+			m.terminalScroll.ScrollToBottom()
+		}
+		if m.activeSub != nil {
+			cols, rows := termview.ViewportDimensions(m.width, m.height)
+			_ = m.activeSub.Resize(cols, rows)
+		}
 		return m, waitForFrameCmd(m.activeSub, m.activeSessionID)
 
 	case tea.KeyMsg:

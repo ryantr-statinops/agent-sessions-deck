@@ -15,6 +15,7 @@ type mockAppClient struct {
 	app.Client
 	listFunc func(ctx context.Context, req app.ListRequest) (app.ListResult, error)
 	scanFunc func(ctx context.Context, req app.ScanRequest) (app.ScanResult, error)
+	openFunc func(ctx context.Context, req app.OpenRequest) (app.OpenResult, error)
 }
 
 func (m *mockAppClient) List(ctx context.Context, req app.ListRequest) (app.ListResult, error) {
@@ -29,6 +30,13 @@ func (m *mockAppClient) Scan(ctx context.Context, req app.ScanRequest) (app.Scan
 		return m.scanFunc(ctx, req)
 	}
 	return app.ScanResult{}, nil
+}
+
+func (m *mockAppClient) Open(ctx context.Context, req app.OpenRequest) (app.OpenResult, error) {
+	if m.openFunc != nil {
+		return m.openFunc(ctx, req)
+	}
+	return app.OpenResult{}, nil
 }
 
 func TestModelInitialization(t *testing.T) {
@@ -182,6 +190,13 @@ func (m *mockTerminalSub) ReadFrame() (app.TerminalFrame, error) {
 	return m.frame, m.err
 }
 
+func (m *mockTerminalSub) InitialSnapshot() app.TerminalSnapshot {
+	if m.frame.Snapshot != nil {
+		return *m.frame.Snapshot
+	}
+	return app.TerminalSnapshot{}
+}
+
 func (m *mockTerminalSub) Resize(cols, rows int) error {
 	m.resizeCols = cols
 	m.resizeRows = rows
@@ -305,5 +320,29 @@ func TestTerminalStreamTerminationFreezesFinalScreen(t *testing.T) {
 	}
 	if len(mFinal.terminalScreen.Lines) != 1 || mFinal.terminalScreen.Lines[0].Cells[0].Text != "Final Output" {
 		t.Fatalf("expected final screen content to be preserved, got %+v", mFinal.terminalScreen)
+	}
+}
+
+func TestOpenSessionTransitionsToViewTerminal(t *testing.T) {
+	sub := &mockTerminalSub{
+		frame: app.TerminalFrame{
+			Snapshot: &app.TerminalSnapshot{
+				Screen: app.TerminalScreen{Columns: 80, Rows: 24},
+			},
+		},
+	}
+	client := &mockAppClient{
+		openFunc: func(ctx context.Context, req app.OpenRequest) (app.OpenResult, error) {
+			return app.OpenResult{Terminal: sub}, nil
+		},
+	}
+	m := NewModel(Options{Client: client})
+	cmd := m.openSessionCmd("s1")
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	mUpdated := updated.(Model)
+	if mUpdated.mode != ViewTerminal || mUpdated.activeSessionID != "s1" {
+		t.Fatalf("expected ViewTerminal mode and activeSessionID 's1', got mode=%v id=%s",
+			mUpdated.mode, mUpdated.activeSessionID)
 	}
 }

@@ -57,3 +57,10 @@ type TerminalFrameMsg struct {
 	Frame     app.TerminalFrame
 	Err       error
 }
+
+// SessionOpenResultMsg delivers the result of opening a session stream.
+type SessionOpenResultMsg struct {
+	SessionID string
+	Result    app.OpenResult
+	Err       error
+}
