@@ -145,6 +145,9 @@ type Service struct {
 	// sessionLocks serializes mutations per session reference.
 	sessionLocksMu sync.Mutex
 	sessionLocks   map[string]*sync.Mutex
+	// recentRestarts tracks the last successful restart per session for idempotency.
+	recentRestartsMu sync.Mutex
+	recentRestarts   map[session.ID]recentRestart
 	// commitMu serializes store commit and event publication across sessions.
 	commitMu sync.Mutex
 	// writeFault latches the first store write failure. It is read and written
@@ -182,6 +185,13 @@ type heldLease struct {
 	subscription TerminalSubscription
 }
 
+type recentRestart struct {
+	previousGeneration session.Generation
+	revision           uint64
+	event              events.Event
+	at                 time.Time
+}
+
 // NewService builds the application service and loads the stored sessions.
 //
 // Loading here is what makes the owner's in-memory state and the store agree
@@ -193,19 +203,20 @@ func NewService(ctx context.Context, deps Deps, opts ...Option) (*Service, error
 		return nil, err
 	}
 	s := &Service{
-		registry:     deps.Registry,
-		workspaces:   deps.Workspaces,
-		store:        deps.Store,
-		runtime:      deps.Runtime,
-		leases:       deps.Leases,
-		terminals:    deps.Terminals,
-		events:       deps.Events,
-		clock:        deps.Clock,
-		ids:          deps.IDs,
-		authority:    session.AuthorityLive,
-		grace:        defaultStopGrace,
-		held:         make(map[attemptKey]heldLease),
-		sessionLocks: make(map[string]*sync.Mutex),
+		registry:       deps.Registry,
+		workspaces:     deps.Workspaces,
+		store:          deps.Store,
+		runtime:        deps.Runtime,
+		leases:         deps.Leases,
+		terminals:      deps.Terminals,
+		events:         deps.Events,
+		clock:          deps.Clock,
+		ids:            deps.IDs,
+		authority:      session.AuthorityLive,
+		grace:          defaultStopGrace,
+		held:           make(map[attemptKey]heldLease),
+		sessionLocks:   make(map[string]*sync.Mutex),
+		recentRestarts: make(map[session.ID]recentRestart),
 	}
 	for _, opt := range opts {
 		if opt != nil {

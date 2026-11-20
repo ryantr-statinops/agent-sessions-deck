@@ -504,6 +504,64 @@ func TestForcedRestartLeavesTheOldAttemptRunningWhenTheStopTimesOut(t *testing.T
 	}
 }
 
+func TestRestartIdempotencyDeduplicatesRepeatedRequests(t *testing.T) {
+	h := newHarness(t)
+	created := h.createRunning(t)
+	id := string(created.Session.ID)
+
+	if _, err := h.svc.Kill(context.Background(), KillRequest{Ref: id}); err != nil {
+		t.Fatalf("Kill: %v", err)
+	}
+
+	// First restart advances session from Generation 1 to Generation 2.
+	res1, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("First restart failed: %v", err)
+	}
+	if res1.Session.Generation != 2 {
+		t.Fatalf("generation = %d, want 2", res1.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (create + first restart)", launches)
+	}
+
+	// Duplicate/retry request without Force should succeed idempotently and NOT fail with conflict.
+	res2, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id})
+	if err != nil {
+		t.Fatalf("Duplicate restart failed: %v", err)
+	}
+	if res2.Session.Generation != 2 {
+		t.Fatalf("duplicate generation = %d, want 2", res2.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (duplicate must not spawn a new attempt)", launches)
+	}
+
+	// Retry with explicit TargetGeneration matching previous generation.
+	res3, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id, TargetGeneration: 1})
+	if err != nil {
+		t.Fatalf("Retry with TargetGeneration failed: %v", err)
+	}
+	if res3.Session.Generation != 2 {
+		t.Fatalf("TargetGeneration retry generation = %d, want 2", res3.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2 (TargetGeneration must not spawn)", launches)
+	}
+
+	// Duplicate with Force: true within deduplication window should NOT kill attempt 2 and spawn attempt 3.
+	res4, err := h.svc.Restart(context.Background(), RestartRequest{Ref: id, Force: true})
+	if err != nil {
+		t.Fatalf("Forced duplicate restart failed: %v", err)
+	}
+	if res4.Session.Generation != 2 {
+		t.Fatalf("forced duplicate generation = %d, want 2 (must not advance to 3)", res4.Session.Generation)
+	}
+	if launches := h.runtime.launchCount(); launches != 2 {
+		t.Fatalf("launchCount = %d, want 2", launches)
+	}
+}
+
 func TestStaleCallbackFromAnOlderAttemptIsReportedNotRaised(t *testing.T) {
 	h := newHarness(t)
 	created := h.createRunning(t)

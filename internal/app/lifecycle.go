@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
@@ -506,6 +507,48 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 		return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
 			"the session has no attempt to restart", "start the session first, then restart it")
 	}
+
+	// Idempotency check across duplicate requests or IPC retries:
+	s.recentRestartsMu.Lock()
+	recent, hasRecent := s.recentRestarts[current.ID]
+	s.recentRestartsMu.Unlock()
+
+	if hasRecent && !attempt.Lifecycle.Terminal() {
+		isTargetMatch := req.TargetGeneration > 0 && req.TargetGeneration == recent.previousGeneration && current.Generation == recent.previousGeneration+1
+		isRecentDuplicate := req.TargetGeneration == 0 && time.Since(recent.at) < 5*time.Second && current.Generation == recent.previousGeneration+1
+		if isTargetMatch || isRecentDuplicate {
+			row, found := s.rowOf(current.ID)
+			if !found {
+				return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
+					"the session disappeared while it was restarting", "list the sessions to see what is stored")
+			}
+			return RestartResult{
+				Session:            row,
+				PreviousGeneration: recent.previousGeneration,
+				Revision:           recent.revision,
+				Event:              recent.event,
+			}, nil
+		}
+	}
+	if req.TargetGeneration > 0 {
+		if req.TargetGeneration > current.Generation {
+			return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
+				fmt.Sprintf("target generation %d is ahead of current generation %d", req.TargetGeneration, current.Generation),
+				"read the session state before restarting").ForAttempt(req.TargetGeneration)
+		}
+		if req.TargetGeneration < current.Generation && !attempt.Lifecycle.Terminal() {
+			row, found := s.rowOf(current.ID)
+			if !found {
+				return RestartResult{}, session.NewError(session.CodeNotFound, string(current.ID),
+					"the session disappeared while it was restarting", "list the sessions to see what is stored")
+			}
+			return RestartResult{
+				Session:            row,
+				PreviousGeneration: current.Generation - 1,
+				Revision:           s.Revision(),
+			}, nil
+		}
+	}
 	if current.Orphaned() {
 		return RestartResult{}, session.NewError(session.CodeConflict, string(current.ID),
 			"the session has a surviving process but no terminal, so a restart would leave it unowned",
@@ -626,6 +669,14 @@ func (s *Service) Restart(ctx context.Context, req RestartRequest) (RestartResul
 	if perr != nil {
 		return RestartResult{Session: row, PreviousGeneration: current.Generation, Revision: revision}, perr
 	}
+	s.recentRestartsMu.Lock()
+	s.recentRestarts[current.ID] = recentRestart{
+		previousGeneration: current.Generation,
+		revision:           revision,
+		event:              event,
+		at:                 time.Now(),
+	}
+	s.recentRestartsMu.Unlock()
 	return RestartResult{Session: row, PreviousGeneration: current.Generation, Revision: revision, Event: event}, nil
 }
 
