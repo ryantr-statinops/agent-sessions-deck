@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -58,6 +59,45 @@ func AcquireLock(path string) (*Lock, error) {
 		return nil, fmt.Errorf("flock %s: %w", path, err)
 	}
 	return &Lock{file: f, path: path}, nil
+}
+
+// WriteToken writes an owner instance fencing token into the locked file.
+func (l *Lock) WriteToken(token string) error {
+	if l == nil {
+		return ErrLockReleased
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return ErrLockReleased
+	}
+	if err := l.file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := l.file.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := l.file.WriteString(token); err != nil {
+		return err
+	}
+	return l.file.Sync()
+}
+
+// ReadToken reads the owner instance fencing token from the locked file.
+func (l *Lock) ReadToken() (string, error) {
+	if l == nil {
+		return "", ErrLockReleased
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return "", ErrLockReleased
+	}
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 // Release drops the lock and closes the descriptor. It serializes with

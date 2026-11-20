@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
@@ -25,6 +26,7 @@ type Owner struct {
 	lock       *store.Lock
 	listener   *net.UnixListener
 	instanceID string
+	socketPath string
 	closed     bool
 }
 
@@ -63,6 +65,10 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mint owner instance ID: %w", err)
 	}
+	token := fmt.Sprintf("%s pid=%d", instanceID, os.Getpid())
+	if err := lock.WriteToken(token); err != nil {
+		return nil, fmt.Errorf("write owner lock token: %w", err)
+	}
 	if err := ensurePrivateDirectory(filepath.Dir(socketPath)); err != nil {
 		return nil, fmt.Errorf("secure socket directory: %w", err)
 	}
@@ -73,12 +79,13 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bind owner control socket: %w", err)
 	}
+	listener.SetUnlinkOnClose(false)
 	if err := os.Chmod(socketPath, 0o600); err != nil {
 		_ = listener.Close()
 		return nil, fmt.Errorf("secure owner control socket: %w", err)
 	}
 	claimed = true
-	return &Owner{lock: lock, listener: listener, instanceID: instanceID}, nil
+	return &Owner{lock: lock, listener: listener, instanceID: instanceID, socketPath: socketPath}, nil
 }
 
 // InstanceID identifies this foreground owner and fences replacement sockets.
@@ -120,6 +127,10 @@ func (o *Owner) Close() error {
 	listenerErr := o.listener.Close()
 	if errors.Is(listenerErr, net.ErrClosed) {
 		listenerErr = nil
+	}
+	token, _ := o.lock.ReadToken()
+	if strings.HasPrefix(token, o.instanceID) {
+		_ = os.Remove(o.socketPath)
 	}
 	lockErr := o.lock.Release()
 	return errors.Join(listenerErr, lockErr)
