@@ -4,6 +4,9 @@ package tui
 
 import (
 	"io"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/charmbracelet/x/term"
 )
@@ -47,4 +50,48 @@ func ResetHostTerminal(w io.Writer, fd uintptr, state *term.State) error {
 		firstErr = err
 	}
 	return firstErr
+}
+
+// InstallSignalCleanup sets up signal handling for SIGINT, SIGTERM, and SIGHUP.
+// If any such signal is received, host terminal state is restored before exiting.
+// The returned cancel function stops signal listening.
+func InstallSignalCleanup(w io.Writer, fd uintptr, state *term.State) func() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	done := make(chan struct{})
+
+	go func() {
+		select {
+		case sig, ok := <-sigCh:
+			if !ok {
+				return
+			}
+			_ = ResetHostTerminal(w, fd, state)
+			signal.Stop(sigCh)
+			if s, ok := sig.(syscall.Signal); ok {
+				_ = syscall.Kill(syscall.Getpid(), s)
+			} else {
+				os.Exit(1)
+			}
+		case <-done:
+			return
+		}
+	}()
+
+	return func() {
+		close(done)
+		signal.Stop(sigCh)
+	}
+}
+
+// WithTerminalRecovery executes fn and ensures that if a panic occurs, host terminal
+// state is restored before re-panicking.
+func WithTerminalRecovery(w io.Writer, fd uintptr, state *term.State, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			_ = ResetHostTerminal(w, fd, state)
+			panic(r)
+		}
+	}()
+	fn()
 }
