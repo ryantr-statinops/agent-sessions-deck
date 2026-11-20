@@ -234,7 +234,9 @@ func NewService(ctx context.Context, deps Deps, opts ...Option) (*Service, error
 
 	stored, revision, err := s.store.Load(ctx)
 	if err != nil {
-		return nil, storeError("read the session metadata", revision, err)
+		return nil, session.WrapError(session.CodeCorruptState, "session store",
+			"the stored session metadata is corrupt or unreadable: "+err.Error(),
+			"repair the stored record by hand; asd never resets session metadata for you", err)
 	}
 	engine, err := session.NewEngine(stored...)
 	if err != nil {
