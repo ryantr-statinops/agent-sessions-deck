@@ -15,6 +15,23 @@ type InputMode struct {
 // EncodeKey translates a Bubble Tea tea.KeyMsg into raw VT byte sequences
 // destined for a child PTY.
 func EncodeKey(msg tea.KeyMsg, mode InputMode) []byte {
+	bytes := encodeKeyBase(msg, mode)
+	if len(bytes) == 0 {
+		return nil
+	}
+
+	// Alt modifier prepends ESC (\x1b)
+	if msg.Alt {
+		res := make([]byte, 1+len(bytes))
+		res[0] = 0x1B
+		copy(res[1:], bytes)
+		return res
+	}
+
+	return bytes
+}
+
+func encodeKeyBase(msg tea.KeyMsg, mode InputMode) []byte {
 	// Handle navigation and editing keys
 	switch msg.Type {
 	case tea.KeyUp:
@@ -51,6 +68,34 @@ func EncodeKey(msg tea.KeyMsg, mode InputMode) []byte {
 		return []byte("\x1b[2~")
 	case tea.KeyDelete:
 		return []byte("\x1b[3~")
+	}
+
+	// Handle function keys F1-F12
+	switch msg.Type {
+	case tea.KeyF1:
+		return []byte("\x1bOP")
+	case tea.KeyF2:
+		return []byte("\x1bOQ")
+	case tea.KeyF3:
+		return []byte("\x1bOR")
+	case tea.KeyF4:
+		return []byte("\x1bOS")
+	case tea.KeyF5:
+		return []byte("\x1b[15~")
+	case tea.KeyF6:
+		return []byte("\x1b[17~")
+	case tea.KeyF7:
+		return []byte("\x1b[18~")
+	case tea.KeyF8:
+		return []byte("\x1b[19~")
+	case tea.KeyF9:
+		return []byte("\x1b[20~")
+	case tea.KeyF10:
+		return []byte("\x1b[21~")
+	case tea.KeyF11:
+		return []byte("\x1b[23~")
+	case tea.KeyF12:
+		return []byte("\x1b[24~")
 	}
 
 	// Handle control keys and ASCII

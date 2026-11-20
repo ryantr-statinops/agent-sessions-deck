@@ -75,3 +75,37 @@ func TestEncodeKeyNavigationAndEditing(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeKeyFunctionsAndAltModifiers(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      tea.KeyMsg
+		expected []byte
+	}{
+		{"F1", tea.KeyMsg{Type: tea.KeyF1}, []byte("\x1bOP")},
+		{"F2", tea.KeyMsg{Type: tea.KeyF2}, []byte("\x1bOQ")},
+		{"F3", tea.KeyMsg{Type: tea.KeyF3}, []byte("\x1bOR")},
+		{"F4", tea.KeyMsg{Type: tea.KeyF4}, []byte("\x1bOS")},
+		{"F5", tea.KeyMsg{Type: tea.KeyF5}, []byte("\x1b[15~")},
+		{"F6", tea.KeyMsg{Type: tea.KeyF6}, []byte("\x1b[17~")},
+		{"F7", tea.KeyMsg{Type: tea.KeyF7}, []byte("\x1b[18~")},
+		{"F8", tea.KeyMsg{Type: tea.KeyF8}, []byte("\x1b[19~")},
+		{"F9", tea.KeyMsg{Type: tea.KeyF9}, []byte("\x1b[20~")},
+		{"F10", tea.KeyMsg{Type: tea.KeyF10}, []byte("\x1b[21~")},
+		{"F11", tea.KeyMsg{Type: tea.KeyF11}, []byte("\x1b[23~")},
+		{"F12", tea.KeyMsg{Type: tea.KeyF12}, []byte("\x1b[24~")},
+		{"Alt+Enter", tea.KeyMsg{Type: tea.KeyEnter, Alt: true}, []byte("\x1b\r")},
+		{"Alt+a", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a"), Alt: true}, []byte("\x1ba")},
+		{"Alt+Up", tea.KeyMsg{Type: tea.KeyUp, Alt: true}, []byte("\x1b\x1b[A")},
+	}
+
+	mode := InputMode{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := EncodeKey(tc.msg, mode)
+			if !bytes.Equal(got, tc.expected) {
+				t.Fatalf("EncodeKey(%v) = %q, want %q", tc.msg, got, tc.expected)
+			}
+		})
+	}
+}
