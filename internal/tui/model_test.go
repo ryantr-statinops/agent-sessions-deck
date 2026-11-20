@@ -171,12 +171,41 @@ func TestModelKeyNavigation(t *testing.T) {
 
 type mockTerminalSub struct {
 	app.TerminalSubscription
-	frame app.TerminalFrame
-	err   error
+	frame       app.TerminalFrame
+	err         error
+	resizeCols  int
+	resizeRows  int
+	resizeCount int
 }
 
 func (m *mockTerminalSub) ReadFrame() (app.TerminalFrame, error) {
 	return m.frame, m.err
+}
+
+func (m *mockTerminalSub) Resize(cols, rows int) error {
+	m.resizeCols = cols
+	m.resizeRows = rows
+	m.resizeCount++
+	return nil
+}
+
+func TestTerminalResizeOnWindowSize(t *testing.T) {
+	sub := &mockTerminalSub{}
+	m := NewModel(Options{})
+	m.mode = ViewTerminal
+	m.activeSub = sub
+
+	// Send WindowSizeMsg 100x30
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	mUpdated := updated.(Model)
+
+	if mUpdated.width != 100 || mUpdated.height != 30 {
+		t.Fatalf("expected dimensions 100x30, got %dx%d", mUpdated.width, mUpdated.height)
+	}
+	if sub.resizeCount != 1 || sub.resizeCols != 100 || sub.resizeRows != 29 {
+		t.Fatalf("expected sub.Resize(100, 29), got count=%d cols=%d rows=%d",
+			sub.resizeCount, sub.resizeCols, sub.resizeRows)
+	}
 }
 
 func TestWaitForFrameCmd(t *testing.T) {
