@@ -12,18 +12,20 @@ ASD chạy các công cụ coding agent thực tế, như Claude Code, Codex CLI
 
 ## Trạng thái hiện tại
 
-Dự án đã hoàn tất các Stage từ 00 đến 09 (toàn bộ Wave W1 và phần lớn Wave W2). Stage 10 (V1 acceptance và release) hiện là stage kế tiếp.
+Dự án đã hoàn tất các Stage từ 00 đến 10 (toàn bộ các mốc **M0, M1, và M2 / V1 Release** đã hoàn thành 100%). Stage 11 (V2 daemon và client migration) là bước kế tiếp thuộc Milestone M3.
 
 | Hạng mục | Trạng thái |
 |---|---|
 | Đặc tả sản phẩm | Đã hoàn thiện trong [PRODUCT.md](PRODUCT.md) |
 | Kế hoạch triển khai | Đã có 16 stage trong [docs/plan/implementation/](docs/plan/implementation/README.md) |
-| Stage thực thi đã hoàn thành | 10/16; Stage 00–09 `DONE`, Stage 10–15 `PLANNED` |
-| Stage tiếp theo | [Stage 10 — V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md) (`PLANNED`) |
-| Mã nguồn, Go module, build và tests | Toàn bộ V1 runtime, CLI, TUI, virtual terminal và recovery hardening đã được nghiệm thu (100% test pass) |
-| Bản phát hành có thể cài đặt | Chuẩn bị đóng gói phát hành tại Stage 10 |
+| Stage thực thi đã hoàn thành | 11/16; Stage 00–10 `DONE`, Stage 11–15 `PLANNED` |
+| Mốc đã hoàn tất | **M0, M1, M2 (V1 Release)** đã nghiệm thu đầy đủ |
+| Stage tiếp theo | [Stage 11 — V2 daemon và client migration](docs/plan/implementation/11-v2-daemon-and-client-migration.md) (`PLANNED`) |
+| Mã nguồn, Go module, build và tests | Toàn bộ V1 runtime, CLI, TUI, virtual terminal, recovery hardening và V1 acceptance E2E đạt 100% test pass |
+| Bản phát hành và tài liệu cài đặt | Đầy đủ bản đóng gói phát hành Linux amd64/arm64 và hướng dẫn tại [docs/installation.md](docs/installation.md) |
 
-Repo đã có đầy đủ mã nguồn Go, toàn bộ CLI (`scan`, `list`, `inspect`, `new`, `open`, `rename`, `restart`, `stop`, `kill`), TUI đa năng (Dashboard, Inspector, Launcher, Virtual Terminal đa phiên) và bộ kiểm thử phục hồi lỗi (fault injection suite). License MIT.
+Repo đã có đầy đủ mã nguồn Go, toàn bộ CLI (`scan`, `list`, `inspect`, `new`, `open`, `rename`, `restart`, `stop`, `kill`), TUI đa năng (Dashboard, Inspector, Launcher, Virtual Terminal đa phiên), bộ kiểm thử phục hồi lỗi và ma trận nghiệm thu V1. License MIT.
+
 
 ## Mục tiêu sản phẩm
 
@@ -72,15 +74,17 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 
 ## Bước triển khai tiếp theo
 
-[Stage 09](docs/plan/implementation/09-recovery-and-lifecycle-hardening.md) đã hoàn tất; xem [báo cáo Stage 09](docs/plan/implementation/reports/stage-09.md). Stage kế tiếp là [Stage 10 — V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md) (`PLANNED`).
+[Stage 10](docs/plan/implementation/10-v1-acceptance-and-release.md) đã hoàn tất; xem [báo cáo Stage 10](docs/plan/implementation/reports/stage-10.md). Toàn bộ mục tiêu Milestone M2 (V1 Release) đã được nghiệm thu và đóng gói hoàn tất.
 
-1. Thực thi Stage 10: V1 acceptance checklist, đóng gói bản phát hành Linux x86_64 và arm64, tài liệu hướng dẫn cài đặt.
-2. Kiểm tra toàn bộ evidence ma trận agent tương thích và release checklist.
-3. Giữ file `LICENSE` và thông báo bản quyền MIT trong artifacts phát hành.
+Bước tiếp theo thuộc Milestone M3:
+- [Stage 11 — V2 daemon và client migration](docs/plan/implementation/11-v2-daemon-and-client-migration.md) (`PLANNED`): Tách biệt vòng đời session khỏi TUI qua daemon `agentd`.
 
 ## Tài liệu
 
 - [PRODUCT.md](PRODUCT.md): ý tưởng, phạm vi sản phẩm và đặc tả kỹ thuật.
+- [Hướng dẫn cài đặt và gỡ bỏ](docs/installation.md): cài đặt binary, biến môi trường, sao lưu và gỡ bỏ.
+- [Ma trận nghiệm thu V1](docs/testing/v1-acceptance.md): bằng chứng kiểm thử, tương thích provider và đo lường benchmark.
+- [Changelog](CHANGELOG.md): ghi chú phát hành các phiên bản.
 - [Hướng dẫn sử dụng TUI](docs/usage.md): điều hướng dashboard, launcher và phím tắt.
 - [Virtual Terminal View](docs/terminal.md): kiến trúc terminal ảo, ANSI renderer và prefix machine.
 - [Phục hồi lỗi và vòng đời](docs/recovery.md): mô hình recovery, xử lý orphan, instance fencing và shutdown có bounded.
@@ -91,7 +95,8 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 - [Contributing](CONTRIBUTING.md): ownership và cách làm việc trong repo.
 - [Development/testing](docs/testing/development.md): prerequisites, Makefile targets, CI và fake-agent contract.
 - [.agents/AGENTS.md](.agents/AGENTS.md): quy tắc dùng skill và cách cập nhật Git subtree SKILLS.
-- [V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md): tiêu chí bàn giao V1.
+- [Báo cáo nghiệm thu Stage 10](docs/plan/implementation/reports/stage-10.md): tổng kết kết quả V1 release.
+
 
 ## License
 
