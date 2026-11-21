@@ -24,11 +24,12 @@ general:
 discovery:
   extra_paths: [~/.local/bin, /opt/agents/bin]
 agents:
-  - id: opencode
-    name: OpenCode
-    executable: /usr/local/bin/opencode
+  - id: custom-shell
+    name: Custom Shell
+    executable: /bin/bash
     args: []
 workspaces:
+
   - path: ~/Kestrel
 terminal:
   scrollback: 10000

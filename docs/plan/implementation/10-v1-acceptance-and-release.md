@@ -1,6 +1,6 @@
 # Stage 10 — V1 acceptance và release
 
-Trạng thái: `PLANNED` · Milestone: M2 / V1 release · Phụ thuộc: 04, 07, 08, 09 · Cỡ việc: M.
+Trạng thái: `COMPLETE` ([báo cáo](reports/stage-10.md)) · Milestone: M2 / V1 release (DONE) · Phụ thuộc: 04, 07, 08, 09 · Cỡ việc: M.
 
 ## Mục tiêu
 
@@ -12,25 +12,26 @@ Release build workflow, README/usage/config/provider/recovery docs, changelog, s
 
 ## Checklist nghiệm thu sản phẩm
 
-- [ ] Fresh install không config/account của ASD: `asd` hiển thị installed/configured agents và empty state có hướng dẫn.
-- [ ] Chọn agent + plain folder hoặc Git workspace → launch → tương tác ngay → detach → tạo agent thứ hai → switch → rename → stop/restart/kill explicit.
-- [ ] Tất cả command V1: `asd`, `scan`, `list`, `new`, `open`, `inspect`, `rename`, `restart`, `stop`, `kill`; filters/help/JSON/exit codes đúng contract.
-- [ ] Generic + ít nhất ba concrete providers có real-launch/terminal smoke bằng version được ghi; nếu thiếu, giảm support claim rõ hoặc chưa release theo scope đã chốt.
-- [ ] Search theo agent/name/path/repo/branch/status/PID và filters hoạt động; status không dùng silence như IDLE.
-- [ ] Active owner/client quit khác nhau; owner crash và PTY unavailable có recovery instructions đã diễn tập.
-- [ ] No-Git/missing-agent/bad config/permission/launch failure/slow Git có thông điệp actionable, không crash.
-- [ ] Agent authentication vẫn do underlying CLI trong PTY xử lý; ASD không yêu cầu hoặc lưu vendor credentials.
+- [x] Fresh install không config/account của ASD: `asd` hiển thị installed/configured agents và empty state có hướng dẫn.
+- [x] Chọn agent + plain folder hoặc Git workspace → launch → tương tác ngay → detach → tạo agent thứ hai → switch → rename → stop/restart/kill explicit.
+- [x] Tất cả command V1: `asd`, `scan`, `list`, `new`, `open`, `inspect`, `rename`, `restart`, `stop`, `kill`; filters/help/JSON/exit codes đúng contract.
+- [x] Generic + ít nhất ba concrete providers có real-launch/terminal smoke bằng version được ghi; nếu thiếu, giảm support claim rõ hoặc chưa release theo scope đã chốt.
+- [x] Search theo agent/name/path/repo/branch/status/PID và filters hoạt động; status không dùng silence như IDLE.
+- [x] Active owner/client quit khác nhau; owner crash và PTY unavailable có recovery instructions đã diễn tập.
+- [x] No-Git/missing-agent/bad config/permission/launch failure/slow Git có thông điệp actionable, không crash.
+- [x] Agent authentication vẫn do underlying CLI trong PTY xử lý; ASD không yêu cầu hoặc lưu vendor credentials.
 
 ## Engineering và packaging checklist
 
-- [ ] Chạy build/unit/integration/race/vet và relevant fault suites; ghi commands/results. Không chạy lại vô hạn nếu chưa có thay đổi hoặc rủi ro mới.
-- [ ] Đo scan/input/UI/memory theo workloads và budgets README; sửa nếu fail hoặc ghi quyết định điều chỉnh mục tiêu có dữ liệu.
-- [ ] Clean-state E2E trên Linux amd64; Linux arm64 cần runtime smoke thật nếu claim tested, nếu chỉ cross-build thì ghi đúng.
-- [ ] CI release tarballs, checksums và version metadata; chọn GoReleaser hay script nhỏ theo nhu cầu, pin tool nếu dùng.
-- [ ] Hướng dẫn cài, uninstall binary, backup/reset metadata explicit, sample config, shortcuts và foreground owner limitations.
-- [ ] Dependency/license review và maintainer chốt LICENSE/module/release identity trước public publish; không tự invent license.
-- [ ] Release candidate được dogfood ít nhất một workflow có hai agent sessions; ghi concrete failures/fixes và known limitations.
-- [ ] Chuẩn bị release notes và artifact reviewable; xuất bản/tag theo phạm vi được giao khi thực thi, không coi tài liệu kế hoạch là authorization publish hiện tại.
+- [x] Chạy build/unit/integration/race/vet và relevant fault suites; ghi commands/results. Không chạy lại vô hạn nếu chưa có thay đổi hoặc rủi ro mới.
+- [x] Đo scan/input/UI/memory theo workloads và budgets README; sửa nếu fail hoặc ghi quyết định điều chỉnh mục tiêu có dữ liệu.
+- [x] Clean-state E2E trên Linux amd64; Linux arm64 cần runtime smoke thật nếu claim tested, nếu chỉ cross-build thì ghi đúng.
+- [x] CI release tarballs, checksums và version metadata; chọn GoReleaser hay script nhỏ theo nhu cầu, pin tool nếu dùng.
+- [x] Hướng dẫn cài, uninstall binary, backup/reset metadata explicit, sample config, shortcuts và foreground owner limitations.
+- [x] Dependency/license review và maintainer chốt LICENSE/module/release identity trước public publish; không tự invent license.
+- [x] Release candidate được dogfood ít nhất một workflow có hai agent sessions; ghi concrete failures/fixes và known limitations.
+- [x] Chuẩn bị release notes và artifact reviewable; xuất bản/tag theo phạm vi được giao khi thực thi, không coi tài liệu kế hoạch là authorization publish hiện tại.
+
 
 ## Gate DONE
 
