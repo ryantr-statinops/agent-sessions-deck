@@ -112,3 +112,30 @@ func TestScanExpandsOnlySupportedExtraPathTildes(t *testing.T) {
 		t.Fatalf("process PATH entry was home-expanded: ok=%v err=%v", ok, err)
 	}
 }
+
+func BenchmarkScan(b *testing.B) {
+	root := b.TempDir()
+	p1 := filepath.Join(root, "p1")
+	p2 := filepath.Join(root, "p2")
+	extra := filepath.Join(root, "extra")
+	for _, dir := range []string{p1, p2, extra} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			b.Fatal(err)
+		}
+	}
+	for i := 0; i < 10; i++ {
+		name := filepath.Join(p1, "agent-"+string(rune('a'+i)))
+		if err := os.WriteFile(name, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			b.Fatal(err)
+		}
+	}
+	opts := Options{Path: []string{p1, p2}, ExtraPaths: []string{extra}}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		found := Scan(opts)
+		if len(found) != 10 {
+			b.Fatalf("Scan returned %d, want 10", len(found))
+		}
+	}
+}
+

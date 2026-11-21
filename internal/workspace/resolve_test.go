@@ -105,3 +105,25 @@ func TestPathResolverGitProbe(t *testing.T) {
 		t.Fatalf("git probe not attached: %v %+v", ok, g)
 	}
 }
+
+func BenchmarkPathResolver(b *testing.B) {
+	root := b.TempDir()
+	d := filepath.Join(root, "repo")
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		b.Fatal(err)
+	}
+	r := NewPathResolver("", func(ctx context.Context, dir string) (Git, error) {
+		return Git{Root: dir, Branch: "main"}, nil
+	})
+	req, _ := NewResolveRequest(d, SourceExplicit)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w, err := r.Resolve(ctx, req)
+		if err != nil || w.Path() != d {
+			b.Fatalf("Resolve failed: %v", err)
+		}
+	}
+}
+
