@@ -124,3 +124,34 @@ func TestRenderScreenRows(t *testing.T) {
 		t.Fatalf("row 1 = %q, want 4 spaces", rows[1])
 	}
 }
+
+func BenchmarkRenderScreen(b *testing.B) {
+	cols := 80
+	rows := 24
+	boldStyle := app.TerminalStyle{Attributes: app.TerminalAttrBold}
+	screen := app.TerminalScreen{
+		Columns: cols,
+		Rows:    rows,
+		Cursor:  app.TerminalCursor{X: 10, Y: 5, Visible: true},
+	}
+	for r := 0; r < rows; r++ {
+		cells := make([]app.TerminalCell, cols)
+		for c := 0; c < cols; c++ {
+			cells[c] = app.TerminalCell{
+				Text:  "A",
+				Width: 1,
+				Style: boldStyle,
+			}
+		}
+		screen.Lines = append(screen.Lines, app.TerminalLine{Index: r, Cells: cells})
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rendered := RenderScreen(screen, cols, rows)
+		if len(rendered) == 0 {
+			b.Fatal("rendered empty")
+		}
+	}
+}
+

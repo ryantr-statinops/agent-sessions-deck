@@ -148,3 +148,13 @@ func TestEncodeKeyPasteAndMultibyteUTF8(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkEncodeKey(b *testing.B) {
+	key := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello world")}
+	mode := InputMode{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = EncodeKey(key, mode)
+	}
+}
+
