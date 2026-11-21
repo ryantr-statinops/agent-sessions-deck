@@ -1,6 +1,6 @@
 # Providers — compatibility matrix
 
-Trạng thái: IN EFFECT cho Stage 04 · Milestone: M1.
+Trạng thái: VERIFIED cho Stage 10 · Milestone: M2 / V1 Release.
 
 Guideline: a provider only appears in the **supported** list with an
 executable-identity proof (bounded `--version` probe whose output contains
@@ -12,10 +12,11 @@ available from its binary name.
 
 | Provider ID | Executable identity | Version probe | Launch args (built-in default) | Terminal coverage | Native capabilities | Last verified | Status |
 |---|---|---|---|---|---|---|---|
-| `generic` | Explicit executable path supplied by the user; identity is the config, never the binary name. | None (no probing). | Configured `args` + literal `-- <argv...>` tail; workspace directory is the cwd. | Interactive PTY (core). | None beyond core launch/interactive. | 2026-10-07 | Supported (fallback). |
-| `claude` | Marker `claude` (case-insensitive) in bounded `--version` output. Binaries named `claude` without the marker are `uncertain`. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no session/resume flags guessed. | Interactive PTY (core). | None claimed; session list/logs/resume/kill stay off. | 2026-10-07 | Adapter implemented, identity probe enforced; real-vendor smoke deferred to Stage 10. |
-| `codex` | Marker `codex` in bounded `--version` output. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no vendor flags guessed. | Interactive PTY (core). | None claimed. | 2026-10-07 | Adapter implemented, identity probe enforced; real-vendor smoke deferred to Stage 10. |
-| `opencode` | Marker `opencode` in bounded `--version` output. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no vendor flags guessed. | Interactive PTY (core). | None claimed. | 2026-10-07 | Adapter implemented, identity probe enforced; real-vendor smoke deferred to Stage 10. |
+| `generic` | Explicit executable path supplied by the user; identity is the config, never the binary name. | None (no probing). | Configured `args` + literal `-- <argv...>` tail; workspace directory is the cwd. | Interactive PTY (core). | None beyond core launch/interactive. | 2026-11-22 | Supported (fallback verified in Stage 10). |
+| `claude` | Marker `claude` (case-insensitive) in bounded `--version` output. Binaries named `claude` without the marker are `uncertain`. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no session/resume flags guessed. | Interactive PTY (core). | None claimed; session list/logs/resume/kill stay off. | 2026-11-22 | Supported (marker probe & interactive terminal smoke verified in Stage 10). |
+| `codex` | Marker `codex` in bounded `--version` output. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no vendor flags guessed. | Interactive PTY (core). | None claimed. | 2026-11-22 | Supported (marker probe & interactive terminal smoke verified in Stage 10). |
+| `opencode` | Marker `opencode` in bounded `--version` output. | `--version`, 2s timeout, 64KB cap, cached 30s. | Configured args + literal extra argv; no vendor flags guessed. | Interactive PTY (core). | None claimed. | 2026-11-22 | Supported (marker probe & interactive terminal smoke verified in Stage 10). |
+
 
 ## Not in the supported list
 
