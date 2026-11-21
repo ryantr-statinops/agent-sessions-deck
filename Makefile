@@ -46,7 +46,8 @@ LDFLAGS ?= -s -w \
 GOFMT_DIRS := $(shell $(GO) list -tags=$(INTEGRATION_TAG) -f '{{.Dir}}' ./... 2>/dev/null)
 
 .PHONY: all help build smoke build-arm64 check fmt fmt-check lint test \
-	test-integration test-race vendor clean
+	test-integration test-race vendor clean release-artifacts checksums
+
 
 all: build
 
@@ -118,6 +119,14 @@ test-integration: ## Integration tests (Linux-only, allocate their own PTY)
 test-race: ## Unit and integration tests under the race detector
 	$(GO) test $(TEST_FLAGS) $(EXTRA_TEST_FLAGS) -tags=$(INTEGRATION_TAG) -race -timeout $(RACE_TIMEOUT) $(PACKAGES)
 
+##@ Release
+
+release-artifacts: ## Build tarballs and checksums for linux/amd64 and linux/arm64
+	@./scripts/package-release.sh $(VERSION)
+
+checksums: release-artifacts ## Verify release checksums in dist/
+	@cd dist && sha256sum -c sha256sums.txt
+
 ##@ Maintenance
 
 vendor: ## Regenerate vendor/ from go.mod (coordinator-only; may fetch missing modules)
@@ -125,6 +134,7 @@ vendor: ## Regenerate vendor/ from go.mod (coordinator-only; may fetch missing m
 	$(GO) mod vendor
 
 clean: ## Remove build output and the test result cache (keeps the Go build cache)
-	rm -rf $(BIN_DIR)
+	rm -rf $(BIN_DIR) dist
 	$(GO) clean -testcache
-	@printf 'clean: removed %s and the Go test cache; run `go clean -cache` to also drop the build cache\n' '$(BIN_DIR)'
+	@printf 'clean: removed %s, dist, and the Go test cache; run `go clean -cache` to also drop the build cache\n' '$(BIN_DIR)'
+
