@@ -51,6 +51,12 @@ With `--json`, output uses lower-case stable keys. Read documents include `comma
 
 Exit codes: `0` success; `1` operation failure; `2` usage/input error; `3` unavailable/non-interactive/corrupt state; `4` conflict or stale generation. The JSON `code` disambiguates causes sharing an exit status.
 
+### Secret Redaction in Diagnostics
+
+All diagnostic and error messages automatically redact sensitive credentials (Bearer tokens, `sk-...` API keys, GitHub tokens `ghp_...`, and `*_TOKEN`/`*_KEY`/`*_SECRET` environment variables) to `[REDACTED]`.
+
+For troubleshooting and recovery guidance, see [docs/recovery.md](recovery.md) and [docs/troubleshooting.md](troubleshooting.md).
+
 ## Owner lifetime
 
-The state-home `.lock` is claimed before the socket is bound. A second owner cannot start. Client disconnection detaches an `open` lease; it never requests child termination. An owner replacement gets a new instance ID, and clients refuse to retry an uncertain mutation against a different owner instance.
+The state-home `.lock` is claimed with an `InstanceID` token before the socket is bound. A second owner cannot start. Client disconnection detaches an `open` lease; it never requests child termination. An owner replacement gets a new instance ID token, and clients refuse to retry an uncertain mutation against a different owner instance. Stale sockets from crashed owners are probed and safely cleaned up, while active sockets are protected by instance fencing.

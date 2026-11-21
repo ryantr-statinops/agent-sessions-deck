@@ -12,18 +12,18 @@ ASD chạy các công cụ coding agent thực tế, như Claude Code, Codex CLI
 
 ## Trạng thái hiện tại
 
-Dự án đã hoàn tất Stage 00 và Stage 01; Stage 02 hiện là stage kế tiếp đã lên kế hoạch.
+Dự án đã hoàn tất các Stage từ 00 đến 09 (toàn bộ Wave W1 và phần lớn Wave W2). Stage 10 (V1 acceptance và release) hiện là stage kế tiếp.
 
 | Hạng mục | Trạng thái |
 |---|---|
-| Đặc tả sản phẩm | Đã có bản draft trong [PRODUCT.md](PRODUCT.md) |
+| Đặc tả sản phẩm | Đã hoàn thiện trong [PRODUCT.md](PRODUCT.md) |
 | Kế hoạch triển khai | Đã có 16 stage trong [docs/plan/implementation/](docs/plan/implementation/README.md) |
-| Stage thực thi đã hoàn thành | 2/16; Stage 00 `DONE`, Stage 01 `DONE`, Stage 02–15 `PLANNED` |
-| Stage tiếp theo | [Stage 02 — Domain và application contracts](docs/plan/implementation/02-domain-and-application-contracts.md) (`PLANNED`) |
-| Mã nguồn, Go module, build và tests | Stage 01 baseline được nghiệm thu; session/product features chưa triển khai |
-| Bản phát hành có thể cài đặt | Chưa có |
+| Stage thực thi đã hoàn thành | 10/16; Stage 00–09 `DONE`, Stage 10–15 `PLANNED` |
+| Stage tiếp theo | [Stage 10 — V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md) (`PLANNED`) |
+| Mã nguồn, Go module, build và tests | Toàn bộ V1 runtime, CLI, TUI, virtual terminal và recovery hardening đã được nghiệm thu (100% test pass) |
+| Bản phát hành có thể cài đặt | Chuẩn bị đóng gói phát hành tại Stage 10 |
 
-Repo có tài liệu sản phẩm, Stage 00 terminal evidence và Stage 01 build/test/CI/fake-agent baseline. Tính năng session chưa triển khai; chưa có binary phát hành. License MIT đã được chọn.
+Repo đã có đầy đủ mã nguồn Go, toàn bộ CLI (`scan`, `list`, `inspect`, `new`, `open`, `rename`, `restart`, `stop`, `kill`), TUI đa năng (Dashboard, Inspector, Launcher, Virtual Terminal đa phiên) và bộ kiểm thử phục hồi lỗi (fault injection suite). License MIT.
 
 ## Mục tiêu sản phẩm
 
@@ -72,19 +72,22 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 
 ## Bước triển khai tiếp theo
 
-[Stage 01](docs/plan/implementation/01-repository-and-engineering-baseline.md) đã hoàn tất; xem [báo cáo evidence](docs/plan/implementation/reports/stage-01.md). Stage kế tiếp là Stage 02 (`PLANNED`).
+[Stage 09](docs/plan/implementation/09-recovery-and-lifecycle-hardening.md) đã hoàn tất; xem [báo cáo Stage 09](docs/plan/implementation/reports/stage-09.md). Stage kế tiếp là [Stage 10 — V1 acceptance và release](docs/plan/implementation/10-v1-acceptance-and-release.md) (`PLANNED`).
 
-1. Thực thi Stage 02: domain và application contracts.
-2. Giữ file `LICENSE` và thông báo bản quyền MIT trong artifacts phát hành.
-3. Giữ các gate Stage 03/05/06/08/10: state durability, PTY runtime, IPC, shortcut UX và agent compatibility.
-
-Chỉ đánh dấu stage hoàn tất khi acceptance đạt và report evidence đã lưu.
+1. Thực thi Stage 10: V1 acceptance checklist, đóng gói bản phát hành Linux x86_64 và arm64, tài liệu hướng dẫn cài đặt.
+2. Kiểm tra toàn bộ evidence ma trận agent tương thích và release checklist.
+3. Giữ file `LICENSE` và thông báo bản quyền MIT trong artifacts phát hành.
 
 ## Tài liệu
 
 - [PRODUCT.md](PRODUCT.md): ý tưởng, phạm vi sản phẩm và đặc tả kỹ thuật.
-- [Kế hoạch tổng quan](docs/plan/implementation/README.md): milestones, dependencies, kiến trúc đề xuất, rủi ro và multi-agent execution.
-- [Stage 00](docs/plan/implementation/00-product-contracts-and-spikes.md): contract/spike hoàn tất; [report](docs/plan/implementation/reports/stage-00.md).
+- [Hướng dẫn sử dụng TUI](docs/usage.md): điều hướng dashboard, launcher và phím tắt.
+- [Virtual Terminal View](docs/terminal.md): kiến trúc terminal ảo, ANSI renderer và prefix machine.
+- [Phục hồi lỗi và vòng đời](docs/recovery.md): mô hình recovery, xử lý orphan, instance fencing và shutdown có bounded.
+- [Hướng dẫn khắc phục sự cố](docs/troubleshooting.md): mã lỗi, giải pháp và kinh nghiệm vận hành.
+- [CLI Reference](docs/cli.md): cú pháp và hành vi lệnh CLI offline và online.
+- [Cấu hình](docs/configuration.md): định dạng tệp cấu hình YAML theo XDG.
+- [Kế hoạch tổng quan](docs/plan/implementation/README.md): milestones, dependencies, báo cáo từng stage và orchestration.
 - [Contributing](CONTRIBUTING.md): ownership và cách làm việc trong repo.
 - [Development/testing](docs/testing/development.md): prerequisites, Makefile targets, CI và fake-agent contract.
 - [.agents/AGENTS.md](.agents/AGENTS.md): quy tắc dùng skill và cách cập nhật Git subtree SKILLS.
