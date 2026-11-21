@@ -107,7 +107,6 @@ func TestNegativeResilienceNoCrashE2E(t *testing.T) {
 		t.Logf("lifecycle not yet terminal: %s (still progressing)", insp.Session.Lifecycle)
 	}
 
-
 	// 5. Slow Git simulation: git resolver timeout doesn't stall indefinitely
 	slowGitResolver := workspace.NewPathResolver("", func(gCtx context.Context, dir string) (workspace.Git, error) {
 		select {

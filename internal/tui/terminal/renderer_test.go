@@ -154,4 +154,3 @@ func BenchmarkRenderScreen(b *testing.B) {
 		}
 	}
 }
-

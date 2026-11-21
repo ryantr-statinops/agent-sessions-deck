@@ -171,8 +171,6 @@ done
 		t.Fatalf("kill --json failed: %v", err)
 	}
 
-
-
 	// 10. Negative contract: inspect non-existent ID
 	_, _, err = runCLI("inspect", "s-nonexistent", "--json")
 	if err == nil {

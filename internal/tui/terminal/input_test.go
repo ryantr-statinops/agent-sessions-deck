@@ -157,4 +157,3 @@ func BenchmarkEncodeKey(b *testing.B) {
 		_ = EncodeKey(key, mode)
 	}
 }
-

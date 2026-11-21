@@ -152,7 +152,6 @@ done
 		t.Fatalf("expected session 2 exited after kill, got: %s", killRes.Session.Lifecycle)
 	}
 
-
 	// Clean up session 1
 	_, _ = client.Kill(context.Background(), app.KillRequest{Ref: id1, Signal: session.SignalKill})
 }

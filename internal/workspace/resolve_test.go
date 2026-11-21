@@ -126,4 +126,3 @@ func BenchmarkPathResolver(b *testing.B) {
 		}
 	}
 }
-

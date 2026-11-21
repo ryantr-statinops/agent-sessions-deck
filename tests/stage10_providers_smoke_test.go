@@ -78,7 +78,6 @@ func TestConcreteProviderPTYLaunchesSmoke(t *testing.T) {
 		{"custom-sh", "Custom Agent"},
 	}
 
-
 	for _, p := range providersToTest {
 		ws := t.TempDir()
 		createRes, err := client.Create(ctx, app.CreateRequest{

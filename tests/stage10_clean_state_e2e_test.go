@@ -51,7 +51,6 @@ func TestCleanStateFreshInstallE2E(t *testing.T) {
 		t.Fatalf("expected agents field in scan json: %+v", scanData)
 	}
 
-
 	// 2. Test `asd list --json` on clean install (must return empty sessions array)
 	var listOut, listErr bytes.Buffer
 	listCmd := cli.NewRoot(cli.Options{

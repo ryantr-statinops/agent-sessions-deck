@@ -138,4 +138,3 @@ func BenchmarkScan(b *testing.B) {
 		}
 	}
 }
-

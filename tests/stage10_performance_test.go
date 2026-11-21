@@ -53,7 +53,6 @@ func TestMemoryAllocationBoundsUnderWorkload(t *testing.T) {
 		t.Fatalf("heap allocation grew by %.2f MB, exceeded 100MB budget (total allowance 612MB)", allocMB)
 	}
 
-
 	// Verify line retrieval remains fast and intact
 	line, ok := ring.Get(0)
 	if !ok || len(line.Cells) != 80 {
