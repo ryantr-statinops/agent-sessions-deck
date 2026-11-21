@@ -17,21 +17,21 @@ discovery:
     - ~/.local/bin
     - /opt/agents/bin
 
+# Custom / Generic agents. Built-in providers (claude, codex, opencode) are
+# discovered automatically on PATH / extra_paths; custom agent IDs must be unique
+# and cannot reuse built-in provider IDs.
 agents:
-  - id: opencode
-    name: OpenCode
-    executable: /usr/local/bin/opencode
-    args: []
-  - id: claude
-    name: Claude Code
-    executable: /usr/local/bin/claude
-    args: ["--model", "default"]
-  - id: codex
-    name: Codex
-    executable: /usr/local/bin/codex
+  - id: custom-shell
+    name: Shell Agent
+    executable: /bin/bash
+    args: ["--norc"]
+  - id: local-llama
+    name: Local Llama Runner
+    executable: /usr/local/bin/llama-cli
     args: []
 
 workspaces:
+
   # Explicitly declared workspaces; `~` expands to the current user's home.
   - path: ~/Kestrel
 
