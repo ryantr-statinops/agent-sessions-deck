@@ -21,6 +21,7 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/daemon"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/ipc"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/process"
@@ -216,14 +217,21 @@ func newCommand(opts Options) *cobra.Command {
 			if !tty {
 				return session.NewError(session.CodeNotInteractive, "new", "creating without a foreground owner requires an interactive terminal", "start asd in a terminal, or attach to an existing owner")
 			}
-			ownerCtx, stopOwner = signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stopOwner()
-			foreground, err = owner.Start(ownerCtx, opts.Paths, opts.Config)
-			if err != nil {
-				return err
+			if daemonErr := daemon.EnsureRunning(ownerCtx, opts.Paths, opts.Config); daemonErr == nil {
+				client, err = ownerClient(ownerCtx, opts)
+				if err != nil {
+					return err
+				}
+			} else {
+				ownerCtx, stopOwner = signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+				defer stopOwner()
+				foreground, err = owner.Start(ownerCtx, opts.Paths, opts.Config)
+				if err != nil {
+					return err
+				}
+				defer foreground.Close()
+				client = foreground.Client()
 			}
-			defer foreground.Close()
-			client = foreground.Client()
 		}
 		if !tty && len(args) < 2 {
 			return session.NewError(session.CodeInvalidConfiguration, "new", "non-interactive creation requires both agent and workspace", "pass explicit agent and workspace arguments")
@@ -334,9 +342,16 @@ func openCommand(opts Options) *cobra.Command {
 		client, err := ownerClient(cmd.Context(), opts)
 		if err != nil {
 			if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED) {
-				return session.NewError(session.CodeSessionIOFailed, args[0], "no foreground owner can provide this session's PTY", "start asd in a terminal, then run open again")
+				if daemonErr := daemon.EnsureRunning(cmd.Context(), opts.Paths, opts.Config); daemonErr == nil {
+					client, err = ownerClient(cmd.Context(), opts)
+				}
 			}
-			return err
+			if err != nil {
+				if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED) {
+					return session.NewError(session.CodeSessionIOFailed, args[0], "no foreground owner or daemon can provide this session's PTY", "start agentd or asd in a terminal, then run open again")
+				}
+				return err
+			}
 		}
 		if err := requireTTY(opts); err != nil {
 			return err
@@ -385,14 +400,21 @@ func restartCommand(opts Options) *cobra.Command {
 			if !hasTTY(opts) {
 				return session.NewError(session.CodeNotInteractive, args[0], "restarting without a foreground owner requires a terminal", "run restart from a terminal so ASD can own the new attempt")
 			}
-			ctx, stopOwner = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-			defer stopOwner()
-			foreground, err = owner.Start(ctx, opts.Paths, opts.Config)
-			if err != nil {
-				return err
+			if daemonErr := daemon.EnsureRunning(ctx, opts.Paths, opts.Config); daemonErr == nil {
+				client, err = ownerClient(ctx, opts)
+				if err != nil {
+					return err
+				}
+			} else {
+				ctx, stopOwner = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+				defer stopOwner()
+				foreground, err = owner.Start(ctx, opts.Paths, opts.Config)
+				if err != nil {
+					return err
+				}
+				defer foreground.Close()
+				client = foreground.Client()
 			}
-			defer foreground.Close()
-			client = foreground.Client()
 		}
 		if force {
 			current, err := client.Get(ctx, app.GetRequest{Ref: args[0]})
