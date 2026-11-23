@@ -1,6 +1,6 @@
 # Stage 11 — V2 daemon và client migration
 
-Trạng thái: `PLANNED` · Milestone: M3 · Phụ thuộc: 10 · Cỡ việc: L.
+Trạng thái: `DONE` ([báo cáo](reports/stage-11.md)) · Milestone: M3 · Phụ thuộc: 10 · Cỡ việc: L.
 
 ## Mục tiêu
 
@@ -12,17 +12,17 @@ Chuyển ownership từ foreground owner sang local daemon `agentd`, để đón
 
 ## Checklist thực thi
 
-- [ ] ADR chuyển ownership và daemon lifetime; `agentd` foreground mode dễ debug, explicit start/status/stop interface nhỏ (chốt syntax trước code), optional user service.
-- [ ] Giữ single owner per state home, protocol handshake và state schema compatibility; daemon và foreground V1 không cùng writer.
-- [ ] Chốt migration với live V1 sessions: require stop/quiesce trước ownership switch; không claim chuyển PTY sống giữa process nếu chưa có FD-transfer mechanism được kiểm thử. Mặc định không triển khai live transfer.
-- [ ] `asd`/CLI trở thành client; daemon absent có explicit startup flow hoặc documented controlled auto-start. Không tạo daemon nhiều lần khi clients start đồng thời.
-- [ ] Daemon giữ PTY/emulator/reader khi không có client, reconciliation/events chạy liên tục; attach lease mất chỉ detach.
-- [ ] Client reconnect resync revision/screen; old connection không ghi vào replacement daemon/session generation.
-- [ ] Daemon stop với active sessions nêu tác động và cần explicit stop/force policy; service restart/crash có honest recovery, không hứa session sống sau daemon chết.
-- [ ] Socket same-user, private paths, no TCP listener mặc định. Daemon không chạy root, không persist full env/secrets.
-- [ ] Logs bounded/rotated, metadata-only; status/diagnostics dùng bootstrap interface không cần PTY.
-- [ ] Optional systemd user unit được tài liệu hóa; không enable autostart/linger tự động khi install. Không coi logout survival là mặc định nếu service policy không bảo đảm.
-- [ ] Version mismatch có migration instruction; newer client không silently corrupt older daemon state.
+- [x] ADR chuyển ownership và daemon lifetime; `agentd` foreground mode dễ debug, explicit start/status/stop interface nhỏ (chốt syntax trước code), optional user service.
+- [x] Giữ single owner per state home, protocol handshake và state schema compatibility; daemon và foreground V1 không cùng writer.
+- [x] Chốt migration với live V1 sessions: require stop/quiesce trước ownership switch; không claim chuyển PTY sống giữa process nếu chưa có FD-transfer mechanism được kiểm thử. Mặc định không triển khai live transfer.
+- [x] `asd`/CLI trở thành client; daemon absent có explicit startup flow hoặc documented controlled auto-start. Không tạo daemon nhiều lần khi clients start đồng thời.
+- [x] Daemon giữ PTY/emulator/reader khi không có client, reconciliation/events chạy liên tục; attach lease mất chỉ detach.
+- [x] Client reconnect resync revision/screen; old connection không ghi vào replacement daemon/session generation.
+- [x] Daemon stop với active sessions nêu tác động và cần explicit stop/force policy; service restart/crash có honest recovery, không hứa session sống sau daemon chết.
+- [x] Socket same-user, private paths, no TCP listener mặc định. Daemon không chạy root, không persist full env/secrets.
+- [x] Logs bounded/rotated, metadata-only; status/diagnostics dùng bootstrap interface không cần PTY.
+- [x] Optional systemd user unit được tài liệu hóa; không enable autostart/linger tự động khi install. Không coi logout survival là mặc định nếu service policy không bảo đảm.
+- [x] Version mismatch có migration instruction; newer client không silently corrupt older daemon state.
 
 ## Acceptance và verification
 

@@ -45,10 +45,20 @@ func (r *Runtime) Close() error { return r.claim.Close() }
 
 // Start claims the owner lock before opening its store or serving the socket.
 func Start(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime, error) {
-	claim, err := ipc.BootstrapPaths(paths)
+	return StartMode(ctx, paths, cfg, "v1-owner")
+}
+
+// StartDaemon claims the owner lock as a daemon before opening its store or serving the socket.
+func StartDaemon(ctx context.Context, paths config.Paths, cfg config.Config) (*Runtime, error) {
+	return StartMode(ctx, paths, cfg, "daemon")
+}
+
+// StartMode claims the owner lock with a specific mode before opening its store or serving the socket.
+func StartMode(ctx context.Context, paths config.Paths, cfg config.Config, mode string) (*Runtime, error) {
+	claim, err := ipc.BootstrapPathsMode(paths, mode)
 	if err != nil {
 		if errors.Is(err, ipc.ErrOwnerLocked) {
-			return nil, session.WrapError(session.CodeOwnerUnavailable, "owner", "another foreground owner already holds this state home", "use that owner's client socket or stop it before starting another owner", err)
+			return nil, session.WrapError(session.CodeOwnerUnavailable, "owner", "another owner already holds this state home", "use that owner's client socket or stop it before starting another owner", err)
 		}
 		return nil, err
 	}

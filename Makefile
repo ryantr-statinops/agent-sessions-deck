@@ -16,6 +16,8 @@ MAKEFLAGS += --no-print-directory
 BIN_DIR ?= bin
 BINARY ?= asd
 CMD ?= ./cmd/asd
+DAEMON_BINARY ?= agentd
+DAEMON_CMD ?= ./cmd/agentd
 PACKAGES ?= ./...
 
 # Integration tests are the files guarded by `//go:build integration`.
@@ -63,15 +65,18 @@ help: ## List available targets
 
 ##@ Build
 
-build: ## Build bin/asd for the host platform with build metadata
+build: ## Build bin/asd and bin/agentd for the host platform with build metadata
 	@test -n "$(MODULE)" || { echo 'build: cannot read the module path from go.mod' >&2; exit 1; }
 	@mkdir -p $(BIN_DIR)
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(CMD)
-	@printf 'build: %s version %s\n' '$(BIN_DIR)/$(BINARY)' '$(VERSION)'
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(DAEMON_BINARY) $(DAEMON_CMD)
+	@printf 'build: %s and %s version %s\n' '$(BIN_DIR)/$(BINARY)' '$(BIN_DIR)/$(DAEMON_BINARY)' '$(VERSION)'
 
 smoke: build ## Run the built binary help and version output
 	@$(BIN_DIR)/$(BINARY) --help >/dev/null
 	@$(BIN_DIR)/$(BINARY) --version
+	@$(BIN_DIR)/$(DAEMON_BINARY) --help >/dev/null
+	@$(BIN_DIR)/$(DAEMON_BINARY) --version
 	@printf 'smoke: --help and --version OK\n'
 
 build-arm64: ## Compile-only check for linux/arm64 (no arm64 runtime is executed)

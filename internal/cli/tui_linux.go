@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/daemon"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/tui"
 )
@@ -20,21 +21,30 @@ func runTUI(ctx context.Context, opts Options) error {
 
 	if err != nil {
 		if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED) {
-			// No active owner running: bootstrap foreground owner
-			runtime, err = owner.Start(ctx, opts.Paths, opts.Config)
-			if err != nil {
-				return err
+			// In V2, try connecting to or launching agentd background daemon first
+			if daemonErr := daemon.EnsureRunning(ctx, opts.Paths, opts.Config); daemonErr == nil {
+				client, err = ownerClient(ctx, opts)
+				if err != nil {
+					return err
+				}
+				isOwner = false
+			} else {
+				// Fallback to foreground owner if agentd cannot be launched
+				runtime, err = owner.Start(ctx, opts.Paths, opts.Config)
+				if err != nil {
+					return err
+				}
+				defer func() {
+					_ = runtime.Close()
+				}()
+
+				go func() {
+					_ = runtime.Serve(ctx)
+				}()
+
+				client = runtime.Client()
+				isOwner = true
 			}
-			defer func() {
-				_ = runtime.Close()
-			}()
-
-			go func() {
-				_ = runtime.Serve(ctx)
-			}()
-
-			client = runtime.Client()
-			isOwner = true
 		} else {
 			return err
 		}

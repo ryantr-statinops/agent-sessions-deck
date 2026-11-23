@@ -43,6 +43,12 @@ for TARGET in $TARGETS; do
         -o "$TARGET_STAGE/asd" \
         ./cmd/asd
 
+    CGO_ENABLED=0 GOOS="$OS" GOARCH="$ARCH" go build \
+        -trimpath \
+        -ldflags "$LDFLAGS" \
+        -o "$TARGET_STAGE/agentd" \
+        ./cmd/agentd
+
     # Copy release collateral into archive payload
     cp LICENSE "$TARGET_STAGE/LICENSE"
     cp README.md "$TARGET_STAGE/README.md"

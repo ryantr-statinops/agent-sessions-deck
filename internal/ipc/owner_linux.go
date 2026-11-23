@@ -33,16 +33,26 @@ type Owner struct {
 
 // BootstrapPaths selects the secure per-state endpoint, then claims ownership.
 func BootstrapPaths(paths config.Paths) (*Owner, error) {
+	return BootstrapPathsMode(paths, "v1-owner")
+}
+
+// BootstrapPathsMode selects the secure per-state endpoint, then claims ownership with the specified mode.
+func BootstrapPathsMode(paths config.Paths, mode string) (*Owner, error) {
 	socketPath, err := SocketPath(paths)
 	if err != nil {
 		return nil, err
 	}
-	return Bootstrap(paths, socketPath)
+	return BootstrapMode(paths, socketPath, mode)
 }
 
 // Bootstrap atomically claims the state home before inspecting or binding its
 // socket. It removes only an owned socket that refuses a connection.
 func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
+	return BootstrapMode(paths, socketPath, "v1-owner")
+}
+
+// BootstrapMode atomically claims the state home with a mode tag before inspecting or binding its socket.
+func BootstrapMode(paths config.Paths, socketPath string, mode string) (*Owner, error) {
 	if paths.StateDir == "" || !filepath.IsAbs(paths.StateDir) {
 		return nil, errors.New("owner bootstrap requires an absolute state directory")
 	}
@@ -52,6 +62,14 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	lock, err := store.AcquireLock(paths.LockPath())
 	if err != nil {
 		if errors.Is(err, store.ErrLocked) {
+			tokenData, _ := os.ReadFile(paths.LockPath())
+			tokenStr := strings.TrimSpace(string(tokenData))
+			if mode == "daemon" && strings.Contains(tokenStr, "mode=v1-owner") {
+				return nil, fmt.Errorf("%w: a V1 foreground owner already holds this state home; stop it before starting agentd", ErrOwnerLocked)
+			}
+			if mode == "v1-owner" && strings.Contains(tokenStr, "mode=daemon") {
+				return nil, fmt.Errorf("%w: agentd daemon already holds this state home; connect as a client instead", ErrOwnerLocked)
+			}
 			return nil, fmt.Errorf("%w: %w", ErrOwnerLocked, err)
 		}
 		return nil, fmt.Errorf("acquire state-home owner lock: %w", err)
@@ -66,7 +84,10 @@ func Bootstrap(paths config.Paths, socketPath string) (*Owner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mint owner instance ID: %w", err)
 	}
-	token := fmt.Sprintf("%s pid=%d", instanceID, os.Getpid())
+	if mode == "" {
+		mode = "v1-owner"
+	}
+	token := fmt.Sprintf("%s pid=%d mode=%s", instanceID, os.Getpid(), mode)
 	if err := lock.WriteToken(token); err != nil {
 		return nil, fmt.Errorf("write owner lock token: %w", err)
 	}

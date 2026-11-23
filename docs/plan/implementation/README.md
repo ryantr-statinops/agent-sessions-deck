@@ -2,7 +2,7 @@
 
 Nguồn yêu cầu: [PRODUCT.md](../../../PRODUCT.md). Ngày lập: 2026-09-28.
 
-Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 01 đã hoàn tất engineering baseline ([report](reports/stage-01.md)); Stage 02–05 `DONE` với report/evidence riêng; Stage 06 `DONE` ([report](reports/stage-06.md)); Stage 07 `DONE` ([report](reports/stage-07.md)); Stage 08 `DONE` ([report](reports/stage-08.md)); Stage 09 `DONE` ([report](reports/stage-09.md)); Stage 10 `DONE` ([report](reports/stage-10.md)). Stage 11–15 `PLANNED`. Đây là kế hoạch triển khai, không phải báo cáo tính năng đã hoàn tất. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
+Stage 00 đã hoàn tất contract/spike ([report](reports/stage-00.md)); Stage 01 đã hoàn tất engineering baseline ([report](reports/stage-01.md)); Stage 02–05 `DONE` với report/evidence riêng; Stage 06 `DONE` ([report](reports/stage-06.md)); Stage 07 `DONE` ([report](reports/stage-07.md)); Stage 08 `DONE` ([report](reports/stage-08.md)); Stage 09 `DONE` ([report](reports/stage-09.md)); Stage 10 `DONE` ([report](reports/stage-10.md)); Stage 11 `DONE` ([report](reports/stage-11.md)). Stage 12–15 `PLANNED`. Đây là kế hoạch triển khai, không phải báo cáo tính năng đã hoàn tất. Ngôn ngữ tài liệu là tiếng Việt; tên API, package và CLI giữ tiếng Anh.
 
 
 ## Mục tiêu và các mốc bàn giao
@@ -43,7 +43,7 @@ Giữ Stage 00–02 cùng report/evidence đã hoàn tất. Từ Stage 03 trở 
 | 09 | [Recovery và lifecycle hardening](09-recovery-and-lifecycle-hardening.md) | 06, 08 | Crash/quit/orphan/concurrency an toàn ([báo cáo](reports/stage-09.md)) | L |
 | 10 | [V1 acceptance và release](10-v1-acceptance-and-release.md) | 04, 07, 08, 09 | Artifact Linux + hướng dẫn + evidence ([báo cáo](reports/stage-10.md)) | M |
 
-| 11 | [V2 daemon và client migration](11-v2-daemon-and-client-migration.md) | 10 | Session sống khi TUI đóng | L |
+| 11 | [V2 daemon và client migration](11-v2-daemon-and-client-migration.md) | 10 | Session sống khi TUI đóng ([báo cáo](reports/stage-11.md)) | L |
 | 12 | [V2 workspace và observability](12-v2-workspaces-and-observability.md) | 11 | Dashboard workspace và metrics | M |
 | 13 | [V2 history và event persistence](13-v2-history-and-event-persistence.md) | 11; gate V2 cần 12 | History, retention, migration | M |
 | 14 | [V3 MCP control plane](14-v3-mcp-control-plane.md) | 11, 12, 13 | MCP tools scoped, bounded I/O | L |
