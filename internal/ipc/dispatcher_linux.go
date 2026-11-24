@@ -195,6 +195,12 @@ func (d *Dispatcher) execute(ctx context.Context, request Frame) Frame {
 		if err == nil {
 			result, err = d.client.Get(ctx, req)
 		}
+	case OpWorkspaces:
+		var req app.WorkspacesRequest
+		err = decodePayload(request.Payload, &req)
+		if err == nil {
+			result, err = d.client.Workspaces(ctx, req)
+		}
 	case "create":
 		var req app.CreateRequest
 		err = decodePayload(request.Payload, &req)
