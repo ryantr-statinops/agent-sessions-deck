@@ -3,8 +3,10 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/metrics"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
@@ -49,6 +51,46 @@ func TestRenderDetailPane(t *testing.T) {
 	}
 
 	for _, exp := range expectedStrings {
+		if !strings.Contains(detail, exp) {
+			t.Fatalf("expected detail pane to contain %q, but got:\n%s", exp, detail)
+		}
+	}
+}
+
+func TestRenderDetailPaneWithMetrics(t *testing.T) {
+	theme := NewTheme()
+	s := session.SessionSnapshot{
+		ID:          session.ID("s-metric-test"),
+		Name:        "metrics-runner",
+		AgentID:     agent.ID("opencode"),
+		WorkspaceID: workspace.ID("/home/dev/kestrel"),
+		Lifecycle:   session.LifecycleRunning,
+		Authority:   session.AuthorityLive,
+	}
+
+	m := &metrics.ProcessMetrics{
+		PID:            4455,
+		CPUPercent:     23.4,
+		MemoryRSSBytes: 1024 * 1024 * 64, // 64 MB
+		TreeRSSBytes:   1024 * 1024 * 128,
+		ProcessCount:   3,
+		Uptime:         125 * time.Second,
+		SampledAt:      time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC),
+	}
+
+	detail := RenderDetailPane(s, theme, 80, m)
+
+	expected := []string{
+		"METRICS & RESOURCE USAGE",
+		"2m 5s",
+		"23.4%",
+		"64.0 MB",
+		"128.0 MB",
+		"3",
+		"12:00:00 UTC",
+	}
+
+	for _, exp := range expected {
 		if !strings.Contains(detail, exp) {
 			t.Fatalf("expected detail pane to contain %q, but got:\n%s", exp, detail)
 		}
