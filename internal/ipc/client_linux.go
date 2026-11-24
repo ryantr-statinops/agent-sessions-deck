@@ -234,8 +234,9 @@ func (c *Client) Open(ctx context.Context, req app.OpenRequest) (app.OpenResult,
 }
 
 // Workspaces returns summaries of sessions grouped by workspace.
-func (c *Client) Workspaces(ctx context.Context, req app.WorkspacesRequest) (app.WorkspacesResult, error) {
-	return app.WorkspacesResult{}, errors.New("unimplemented")
+func (c *Client) Workspaces(ctx context.Context, req app.WorkspacesRequest) (out app.WorkspacesResult, err error) {
+	err = c.call(ctx, OpWorkspaces, req, &out)
+	return
 }
 
 var _ app.Client = (*Client)(nil)
