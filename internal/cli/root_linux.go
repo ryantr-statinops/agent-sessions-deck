@@ -191,6 +191,19 @@ func inspectCommand(opts Options) *cobra.Command {
 		if report.Git != nil {
 			fmt.Fprintf(opts.Stdout, "git_root: %s\ngit_branch: %s\ngit_dirty: %t\ngit_changed_files: %d\n", report.Git.Root, report.Git.Branch, report.Git.Dirty, report.Git.ChangedFiles)
 		}
+		if report.Metrics != nil {
+			m := report.Metrics
+			if m.Unavailable {
+				fmt.Fprintf(opts.Stdout, "metrics_status: unavailable (%s)\n", m.Error)
+			} else {
+				staleNotice := ""
+				if m.Stale {
+					staleNotice = " (stale)"
+				}
+				fmt.Fprintf(opts.Stdout, "cpu: %.1f%%\nmemory_rss: %d\ntree_rss: %d\nprocess_count: %d\nuptime: %.1fs\nmetrics_sampled_at: %s%s\n",
+					m.CPUPercent, m.MemoryRSSBytes, m.TreeRSSBytes, m.ProcessCount, m.UptimeSeconds, m.SampledAt.Format(time.RFC3339), staleNotice)
+			}
+		}
 		if report.WorkspaceError != "" {
 			fmt.Fprintf(opts.Stderr, "workspace detail unavailable: %s\n", report.WorkspaceError)
 		}
