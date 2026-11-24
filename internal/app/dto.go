@@ -552,6 +552,8 @@ type Client interface {
 	Scan(ctx context.Context, req ScanRequest) (ScanResult, error)
 	// List returns the session rows the owner knows about, with their authority.
 	List(ctx context.Context, req ListRequest) (ListResult, error)
+	// Workspaces returns aggregated summaries of sessions grouped by workspace.
+	Workspaces(ctx context.Context, req WorkspacesRequest) (WorkspacesResult, error)
 	// Get returns one session's live and stored readings.
 	Get(ctx context.Context, req GetRequest) (GetResult, error)
 	// Create resolves a workspace and a command, launches one attempt and

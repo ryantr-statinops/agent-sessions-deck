@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/metrics"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
 
 // Scan reports the agent definitions this owner knows about.
@@ -117,12 +119,80 @@ func (s *Service) Get(ctx context.Context, req GetRequest) (GetResult, error) {
 	if err != nil {
 		return GetResult{}, err
 	}
+	var procMetrics metrics.ProcessMetrics
+	if s.metricsCache != nil && current.Lifecycle() == session.LifecycleRunning {
+		if latest, ok := current.Current(); ok && latest.Identity.PID > 0 {
+			procMetrics = s.metricsCache.GetOrSample(current.ID, latest.Identity, latest.StartedAt)
+		}
+	}
 	return GetResult{
 		Session:    session.SessionSnapshotOf(current, s.authority, now, revision),
 		Stored:     stored,
 		Persisted:  persisted,
 		Revision:   revision,
 		ObservedAt: now,
+		Metrics:    procMetrics,
+	}, nil
+}
+
+// Workspaces returns aggregated summaries of sessions grouped by workspace.
+func (s *Service) Workspaces(ctx context.Context, req WorkspacesRequest) (WorkspacesResult, error) {
+	if err := req.Validate(); err != nil {
+		return WorkspacesResult{}, err
+	}
+
+	snap, err := s.snapshot(s.now())
+	if err != nil {
+		return WorkspacesResult{}, err
+	}
+
+	records := make([]workspace.SessionRecord, 0, len(snap.Sessions))
+	for _, row := range snap.Sessions {
+		if req.AgentID != "" && row.AgentID != req.AgentID {
+			continue
+		}
+		if len(req.Lifecycles) > 0 && !slices.Contains(req.Lifecycles, row.Lifecycle) {
+			continue
+		}
+		records = append(records, workspace.SessionRecord{
+			ID:         string(row.ID),
+			Workspace:  row.WorkspaceID,
+			Active:     row.Lifecycle.Active(),
+			ObservedAt: row.ObservedAt,
+		})
+	}
+
+	if len(records) == 0 {
+		return WorkspacesResult{
+			Authority:  s.authority,
+			ObservedAt: s.now(),
+			Workspaces: []workspace.WorkspaceSummary{},
+		}, nil
+	}
+
+	grouped := workspace.GroupByWorkspace(records)
+	summaries := make([]workspace.WorkspaceSummary, 0, len(grouped))
+
+	for wsID, recs := range grouped {
+		ws, err := workspace.New(string(wsID))
+		if err != nil {
+			continue
+		}
+		if s.gitCache != nil {
+			if gitMeta, err := s.gitCache.Probe(ctx, ws.Path()); err == nil && gitMeta.Root != "" {
+				ws, _ = ws.WithGit(gitMeta)
+			}
+		}
+		summary := workspace.SummarizeGroup(ws, recs)
+		summaries = append(summaries, summary)
+	}
+
+	workspace.SortSummaries(summaries)
+
+	return WorkspacesResult{
+		Authority:  s.authority,
+		ObservedAt: s.now(),
+		Workspaces: summaries,
 	}, nil
 }
 
