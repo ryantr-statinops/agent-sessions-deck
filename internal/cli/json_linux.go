@@ -9,6 +9,7 @@ import (
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/git"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/metrics"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
@@ -56,17 +57,52 @@ type listDocument struct {
 }
 
 type inspectDocument struct {
-	Command        string            `json:"command"`
-	Authority      session.Authority `json:"authority"`
-	ObservedAt     time.Time         `json:"observed_at"`
-	Revision       uint64            `json:"revision"`
-	Session        sessionDocument   `json:"session"`
-	Stored         sessionDocument   `json:"stored"`
-	Persisted      bool              `json:"persisted"`
-	IOAvailability string            `json:"io_availability"`
-	WorkspacePath  string            `json:"workspace_path"`
-	Git            *gitDocument      `json:"git,omitempty"`
-	WorkspaceError string            `json:"workspace_error,omitempty"`
+	Command        string                  `json:"command"`
+	Authority      session.Authority       `json:"authority"`
+	ObservedAt     time.Time               `json:"observed_at"`
+	Revision       uint64                  `json:"revision"`
+	Session        sessionDocument         `json:"session"`
+	Stored         sessionDocument         `json:"stored"`
+	Persisted      bool                    `json:"persisted"`
+	IOAvailability string                  `json:"io_availability"`
+	WorkspacePath  string                  `json:"workspace_path"`
+	Git            *gitDocument            `json:"git,omitempty"`
+	WorkspaceError string                  `json:"workspace_error,omitempty"`
+	Metrics        *processMetricsDocument `json:"metrics,omitempty"`
+}
+
+type processMetricsDocument struct {
+	SampledAt      time.Time `json:"sampled_at"`
+	PID            int       `json:"pid"`
+	PGID           int       `json:"pgid"`
+	State          string    `json:"state"`
+	UptimeSeconds  float64   `json:"uptime_seconds"`
+	CPUPercent     float64   `json:"cpu_percent"`
+	MemoryRSSBytes uint64    `json:"memory_rss_bytes"`
+	TreeRSSBytes   uint64    `json:"tree_rss_bytes"`
+	ProcessCount   int       `json:"process_count"`
+	Stale          bool      `json:"stale,omitempty"`
+	Unavailable    bool      `json:"unavailable,omitempty"`
+	Error          string    `json:"error,omitempty"`
+}
+
+type workspaceSummaryDocument struct {
+	WorkspaceID    string       `json:"workspace_id"`
+	Path           string       `json:"path"`
+	DisplayName    string       `json:"display_name"`
+	Git            *gitDocument `json:"git,omitempty"`
+	IsSubdirectory bool         `json:"is_subdirectory"`
+	ActiveCount    int          `json:"active_count"`
+	TotalCount     int          `json:"total_count"`
+	SessionIDs     []string     `json:"session_ids"`
+	LastObservedAt time.Time    `json:"last_observed_at,omitempty"`
+}
+
+type workspacesDocument struct {
+	Command    string                     `json:"command"`
+	Authority  session.Authority          `json:"authority"`
+	ObservedAt time.Time                  `json:"observed_at"`
+	Workspaces []workspaceSummaryDocument `json:"workspaces"`
 }
 
 type mutationDocument struct {
@@ -136,7 +172,60 @@ func inspectDocumentOf(ctx context.Context, result app.GetResult, ownerID string
 	} else {
 		out.WorkspaceError = err.Error()
 	}
+	out.Metrics = metricsDocumentOf(result.Metrics)
 	return out
+}
+
+func metricsDocumentOf(m metrics.ProcessMetrics) *processMetricsDocument {
+	if m.IsZero() {
+		return nil
+	}
+	return &processMetricsDocument{
+		SampledAt:      m.SampledAt,
+		PID:            m.PID,
+		PGID:           m.PGID,
+		State:          m.State,
+		UptimeSeconds:  m.Uptime.Seconds(),
+		CPUPercent:     m.CPUPercent,
+		MemoryRSSBytes: m.MemoryRSSBytes,
+		TreeRSSBytes:   m.TreeRSSBytes,
+		ProcessCount:   m.ProcessCount,
+		Stale:          m.Stale,
+		Unavailable:    m.Unavailable,
+		Error:          m.Error,
+	}
+}
+
+func workspacesDocumentOf(result app.WorkspacesResult) workspacesDocument {
+	items := make([]workspaceSummaryDocument, 0, len(result.Workspaces))
+	for _, s := range result.Workspaces {
+		doc := workspaceSummaryDocument{
+			WorkspaceID:    string(s.Workspace.ID()),
+			Path:           s.Workspace.Path(),
+			DisplayName:    s.Workspace.DisplayName(),
+			IsSubdirectory: workspace.IsSubdirectoryOfGitRoot(s.Workspace),
+			ActiveCount:    s.ActiveCount,
+			TotalCount:     s.TotalCount,
+			SessionIDs:     s.SessionIDs,
+			LastObservedAt: s.LastObservedAt,
+		}
+		if s.Git != nil {
+			doc.Git = &gitDocument{
+				Root:         s.Git.Root,
+				Branch:       s.Git.Branch,
+				Detached:     s.Git.Detached,
+				Dirty:        s.Git.Dirty,
+				ChangedFiles: s.Git.ChangedFiles,
+			}
+		}
+		items = append(items, doc)
+	}
+	return workspacesDocument{
+		Command:    "workspaces",
+		Authority:  result.Authority,
+		ObservedAt: result.ObservedAt,
+		Workspaces: items,
+	}
 }
 
 func restartDocumentOf(result app.RestartResult) mutationDocument {
