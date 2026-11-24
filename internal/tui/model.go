@@ -399,6 +399,18 @@ func (m *Model) SetGroupByWorkspace(enabled bool) {
 	}
 }
 
+// SetWindowSize sets the dimensions of the terminal window.
+func (m *Model) SetWindowSize(width, height int) {
+	m.width = width
+	m.height = height
+}
+
+// SetSessions sets the active session snapshots and refreshes filters and groupings.
+func (m *Model) SetSessions(sessions []session.SessionSnapshot) {
+	m.sessions = sessions
+	m.reapplyFilter()
+}
+
 // buildWorkspaceGroups partitions the filtered sessions into WorkspaceGroup structures.
 func (m Model) buildWorkspaceGroups() []WorkspaceGroup {
 	if len(m.filteredSessions) == 0 {

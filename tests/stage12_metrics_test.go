@@ -161,10 +161,15 @@ func TestStage12_DescendantAttributionBoundaries(t *testing.T) {
 }
 
 func createProcInRoot(t *testing.T, procRoot string, pid int, comm string, state string, ppid int, utime, stime, starttime uint64, rssPages uint64) {
-	t.Helper()
+	if t != nil {
+		t.Helper()
+	}
 	pidDir := filepath.Join(procRoot, fmt.Sprintf("%d", pid))
 	if err := os.MkdirAll(pidDir, 0o755); err != nil {
-		t.Fatal(err)
+		if t != nil {
+			t.Fatal(err)
+		}
+		panic(err)
 	}
 
 	fields := make([]string, 52)
@@ -181,11 +186,17 @@ func createProcInRoot(t *testing.T, procRoot string, pid int, comm string, state
 
 	statContent := fmt.Sprintf("%s\n", joinWithSpaces(fields))
 	if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte(statContent), 0o644); err != nil {
-		t.Fatal(err)
+		if t != nil {
+			t.Fatal(err)
+		}
+		panic(err)
 	}
 
 	statmContent := fmt.Sprintf("%d %d 0 0 0 0 0\n", rssPages*2, rssPages)
 	if err := os.WriteFile(filepath.Join(pidDir, "statm"), []byte(statmContent), 0o644); err != nil {
-		t.Fatal(err)
+		if t != nil {
+			t.Fatal(err)
+		}
+		panic(err)
 	}
 }
