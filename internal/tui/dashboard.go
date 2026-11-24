@@ -216,12 +216,17 @@ func (m Model) renderDashboard() string {
 }
 
 func (m Model) renderFooter(theme Theme) string {
+	groupDesc := "Group"
+	if m.groupByWorkspace {
+		groupDesc = "Flat"
+	}
 	shortcuts := []struct {
 		key  string
 		desc string
 	}{
 		{"Enter", "Run/Open"},
 		{"n", "New"},
+		{"w", groupDesc},
 		{"/", "Search"},
 		{"d", "Detail"},
 		{"r", "Restart"},

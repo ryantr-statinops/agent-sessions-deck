@@ -201,3 +201,32 @@ func TestTerminalKeymapCtrlCForwardsToPTY(t *testing.T) {
 		t.Fatalf("expected 0x03 written to PTY, got %+v", sub.writes)
 	}
 }
+
+func TestKeymapToggleWorkspaceGrouping(t *testing.T) {
+	m := NewModel(Options{})
+	m.mode = ViewDashboard
+
+	if m.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace initially false")
+	}
+
+	// Press 'w'
+	up1, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
+	m1 := up1.(Model)
+	if !m1.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace true after 'w'")
+	}
+	if !strings.Contains(m1.statusMessage, "Grouped by workspace") {
+		t.Fatalf("unexpected status message: %s", m1.statusMessage)
+	}
+
+	// Press 'w' again
+	up2, _ := m1.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
+	m2 := up2.(Model)
+	if m2.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace false after second 'w'")
+	}
+	if !strings.Contains(m2.statusMessage, "Flat session view") {
+		t.Fatalf("unexpected status message: %s", m2.statusMessage)
+	}
+}
