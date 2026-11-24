@@ -1,6 +1,6 @@
 # Stage 12 — V2 workspace view và observability
 
-Trạng thái: `PLANNED` · Milestone: M3 · Phụ thuộc: 11 · Cỡ việc: M.
+Trạng thái: `DONE` ([báo cáo](reports/stage-12.md)) · Milestone: M3 · Phụ thuộc: 11 · Cỡ việc: M.
 
 ## Mục tiêu
 
@@ -12,16 +12,16 @@ Workspace projections tại `internal/workspace/`, `internal/metrics/`, daemon p
 
 ## Checklist thực thi
 
-- [ ] Projection workspace → logical sessions → attempts; preserve launch cwd khác repo root, grouped repo option rõ và stable workspace identity.
-- [ ] Workspace list có active/historical counts, agent/name/status, branch/dirty; navigation tới terminal/inspect cùng service contracts.
-- [ ] Linux metrics sampler đọc CPU/memory/starttime/process tree cho verified ASD attempts; không theo dõi arbitrary agent binary toàn máy.
-- [ ] CPU percent theo interval, units và normalization được định nghĩa; memory là RSS hay aggregate descendants ghi rõ, không double count shared pages như private memory.
-- [ ] Uptime dùng attempt start time/monotonic clock cho live measurement, không logical session created time sau restart.
-- [ ] Descendant process attribution verify parent/start identity; detached processes không tự adopt từ similarity cwd/command.
-- [ ] Per-field `unavailable/permission denied/stale` + sampled_at; last ASD event khác provider semantic event, không bịa “tool execution” từ PTY text.
-- [ ] Git refresh cached/throttled, timeout và configured interval; dirty state không block terminal input.
-- [ ] Sampling pause/backoff khi không cần detail hoặc theo daemon policy; bounded concurrency và no FD leak.
-- [ ] CLI JSON workspace/inspect metrics có unit/timestamp/null reason; TUI compact fallback cho small terminal.
+- [x] Projection workspace → logical sessions → attempts; preserve launch cwd khác repo root, grouped repo option rõ và stable workspace identity.
+- [x] Workspace list có active/historical counts, agent/name/status, branch/dirty; navigation tới terminal/inspect cùng service contracts.
+- [x] Linux metrics sampler đọc CPU/memory/starttime/process tree cho verified ASD attempts; không theo dõi arbitrary agent binary toàn máy.
+- [x] CPU percent theo interval, units và normalization được định nghĩa; memory là RSS hay aggregate descendants ghi rõ, không double count shared pages như private memory.
+- [x] Uptime dùng attempt start time/monotonic clock cho live measurement, không logical session created time sau restart.
+- [x] Descendant process attribution verify parent/start identity; detached processes không tự adopt từ similarity cwd/command.
+- [x] Per-field `unavailable/permission denied/stale` + sampled_at; last ASD event khác provider semantic event, không bịa “tool execution” từ PTY text.
+- [x] Git refresh cached/throttled, timeout và configured interval; dirty state không block terminal input.
+- [x] Sampling pause/backoff khi không cần detail hoặc theo daemon policy; bounded concurrency và no FD leak.
+- [x] CLI JSON workspace/inspect metrics có unit/timestamp/null reason; TUI compact fallback cho small terminal.
 
 ## Acceptance và verification
 
