@@ -74,3 +74,49 @@ func TestDashboardDetailSplit(t *testing.T) {
 		t.Fatalf("expected side-by-side SESSION INSPECTOR pane when showDetail=true")
 	}
 }
+
+func TestDashboardWorkspaceGroupedRendering(t *testing.T) {
+	m := NewModel(Options{})
+	m.width = 120
+	m.height = 30
+	m.sessions = []session.SessionSnapshot{
+		{
+			ID:          session.ID("sess-1"),
+			Name:        "task-1",
+			AgentID:     agent.ID("opencode"),
+			WorkspaceID: workspace.ID("/repo/backend"),
+			Lifecycle:   session.LifecycleRunning,
+		},
+		{
+			ID:          session.ID("sess-2"),
+			Name:        "task-2",
+			AgentID:     agent.ID("opencode"),
+			WorkspaceID: workspace.ID("/repo/backend"),
+			Lifecycle:   session.LifecycleExited,
+		},
+		{
+			ID:          session.ID("sess-3"),
+			Name:        "frontend-app",
+			AgentID:     agent.ID("claude"),
+			WorkspaceID: workspace.ID("/repo/frontend"),
+			Lifecycle:   session.LifecycleRunning,
+		},
+	}
+	m.filteredSessions = m.sessions
+	m.SetGroupByWorkspace(true)
+
+	rendered := m.renderDashboard()
+
+	if !strings.Contains(rendered, "📁 /repo/backend") {
+		t.Fatalf("expected workspace header for /repo/backend, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "📁 /repo/frontend") {
+		t.Fatalf("expected workspace header for /repo/frontend, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "(1 active, 2 total)") {
+		t.Fatalf("expected (1 active, 2 total) for backend, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "task-1") || !strings.Contains(rendered, "frontend-app") {
+		t.Fatalf("expected sessions in output:\n%s", rendered)
+	}
+}

@@ -106,3 +106,39 @@ func TestErrorToWireDoesNotExposeUnstructuredCause(t *testing.T) {
 		t.Fatalf("unstructured error leaked details into wire response: %+v", wire)
 	}
 }
+
+func TestOpWorkspacesFraming(t *testing.T) {
+	if !ValidOperation(OpWorkspaces) {
+		t.Fatalf("expected OpWorkspaces to be valid operation")
+	}
+	if ValidOperation("invalid-op") {
+		t.Fatalf("expected invalid-op to not be valid operation")
+	}
+
+	frame := Frame{
+		Version:   ProtocolVersion,
+		Type:      FrameRequest,
+		RequestID: "req-workspaces-1",
+		Operation: OpWorkspaces,
+		Payload:   []byte(`{"lifecycles":["running"]}`),
+	}
+	if err := frame.Validate(); err != nil {
+		t.Fatalf("frame.Validate: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := WriteFrame(&buf, frame); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+
+	decoded, err := ReadFrame(&buf)
+	if err != nil {
+		t.Fatalf("ReadFrame: %v", err)
+	}
+	if decoded.Operation != OpWorkspaces {
+		t.Fatalf("expected operation %q, got %q", OpWorkspaces, decoded.Operation)
+	}
+	if decoded.RequestID != "req-workspaces-1" {
+		t.Fatalf("expected request ID req-workspaces-1, got %q", decoded.RequestID)
+	}
+}

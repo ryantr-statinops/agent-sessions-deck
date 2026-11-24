@@ -100,6 +100,16 @@ func WithStopGrace(grace time.Duration) Option {
 	return func(s *Service) { s.grace = grace }
 }
 
+// WithMetricsCache sets a custom process metrics cache.
+func WithMetricsCache(c *MetricsCache) Option {
+	return func(s *Service) { s.metricsCache = c }
+}
+
+// WithGitCache sets a custom git throttle cache.
+func WithGitCache(c *GitThrottleCache) Option {
+	return func(s *Service) { s.gitCache = c }
+}
+
 // Service is the application layer: one owner of sessions, workspaces, children
 // and interactive leases.
 //
@@ -137,6 +147,9 @@ type Service struct {
 
 	authority session.Authority
 	grace     time.Duration
+
+	metricsCache *MetricsCache
+	gitCache     *GitThrottleCache
 
 	// mutMu serializes every mutating use case. It is held across the reducer
 	// applies, the port calls, the store commit and the event publish, so a
@@ -222,6 +235,12 @@ func NewService(ctx context.Context, deps Deps, opts ...Option) (*Service, error
 		if opt != nil {
 			opt(s)
 		}
+	}
+	if s.metricsCache == nil {
+		s.metricsCache = NewMetricsCache(DefaultMetricsTTL, defaultProcessSampler, s.now)
+	}
+	if s.gitCache == nil {
+		s.gitCache = NewGitThrottleCache(DefaultGitThrottleTTL, nil, s.now)
 	}
 	if !s.authority.Valid() {
 		return nil, session.NewError(session.CodeInvalidConfiguration, "application service",

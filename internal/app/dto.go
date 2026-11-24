@@ -8,6 +8,7 @@ import (
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/metrics"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
@@ -143,6 +144,31 @@ type GetResult struct {
 	Revision uint64
 	// ObservedAt is when the row was observed, UTC.
 	ObservedAt time.Time
+	// Metrics contains live process metrics for active attempts.
+	Metrics metrics.ProcessMetrics
+}
+
+// WorkspacesRequest queries projected workspace summaries.
+type WorkspacesRequest struct {
+	AgentID    agent.ID
+	Lifecycles []session.Lifecycle
+}
+
+// Validate checks request invariants.
+func (r WorkspacesRequest) Validate() error {
+	for _, l := range r.Lifecycles {
+		if !l.Valid() {
+			return session.NewError(session.CodeInvalidConfiguration, string(l), "invalid lifecycle in workspaces request", "use valid lifecycle state")
+		}
+	}
+	return nil
+}
+
+// WorkspacesResult carries projected summaries of all active/stored workspaces.
+type WorkspacesResult struct {
+	Authority  session.Authority
+	ObservedAt time.Time
+	Workspaces []workspace.WorkspaceSummary
 }
 
 // CreateRequest launches a new session.
@@ -526,6 +552,8 @@ type Client interface {
 	Scan(ctx context.Context, req ScanRequest) (ScanResult, error)
 	// List returns the session rows the owner knows about, with their authority.
 	List(ctx context.Context, req ListRequest) (ListResult, error)
+	// Workspaces returns aggregated summaries of sessions grouped by workspace.
+	Workspaces(ctx context.Context, req WorkspacesRequest) (WorkspacesResult, error)
 	// Get returns one session's live and stored readings.
 	Get(ctx context.Context, req GetRequest) (GetResult, error)
 	// Create resolves a workspace and a command, launches one attempt and

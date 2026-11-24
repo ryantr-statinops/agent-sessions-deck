@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
 
 type countingClient struct {
@@ -99,4 +101,49 @@ type failingClient struct{ app.Client }
 
 func (failingClient) List(context.Context, app.ListRequest) (app.ListResult, error) {
 	return app.ListResult{}, errors.New("/sensitive/path")
+}
+
+type workspacesTestClient struct {
+	app.Client
+	workspacesCalled bool
+}
+
+func (c *workspacesTestClient) Workspaces(ctx context.Context, req app.WorkspacesRequest) (app.WorkspacesResult, error) {
+	c.workspacesCalled = true
+	return app.WorkspacesResult{
+		Authority: session.AuthorityLive,
+		Workspaces: []workspace.WorkspaceSummary{
+			{TotalCount: 2, ActiveCount: 1},
+		},
+	}, nil
+}
+
+func TestDispatcherHandlesWorkspaces(t *testing.T) {
+	client := &workspacesTestClient{}
+	dispatcher, err := NewDispatcher(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(app.WorkspacesRequest{})
+	request := Frame{
+		Version:   ProtocolVersion,
+		Type:      FrameRequest,
+		RequestID: "ws-req",
+		Operation: OpWorkspaces,
+		Payload:   payload,
+	}
+	response := dispatcher.Handle(context.Background(), request)
+	if response.Error != nil {
+		t.Fatalf("unexpected error response: %+v", response.Error)
+	}
+	if !client.workspacesCalled {
+		t.Fatalf("expected client.Workspaces to be called")
+	}
+	var res app.WorkspacesResult
+	if err := json.Unmarshal(response.Payload, &res); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(res.Workspaces) != 1 || res.Workspaces[0].TotalCount != 2 {
+		t.Fatalf("unexpected result: %+v", res)
+	}
 }

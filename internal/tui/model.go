@@ -11,6 +11,7 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	termview "github.com/ryantr-statinops/agent-sessions-deck/internal/tui/terminal"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
 
 // Model is the top-level Bubble Tea model orchestrating the TUI views.
@@ -28,6 +29,8 @@ type Model struct {
 	filteredSessions []session.SessionSnapshot
 	agents           []owner.AgentProbe
 	recentWorkspaces []string
+	groupByWorkspace bool
+	workspaceGroups  []WorkspaceGroup
 
 	// Navigation & state
 	cursor        int
@@ -371,6 +374,78 @@ func (m *Model) reapplyFilter() {
 	if m.cursor >= len(m.filteredSessions) {
 		m.cursor = max(0, len(m.filteredSessions)-1)
 	}
+	if m.groupByWorkspace {
+		m.workspaceGroups = m.buildWorkspaceGroups()
+	}
+}
+
+// GroupByWorkspace reports whether sessions are grouped by workspace.
+func (m Model) GroupByWorkspace() bool {
+	return m.groupByWorkspace
+}
+
+// WorkspaceGroups returns the active workspace groups.
+func (m Model) WorkspaceGroups() []WorkspaceGroup {
+	return m.workspaceGroups
+}
+
+// SetGroupByWorkspace toggles or sets workspace grouping.
+func (m *Model) SetGroupByWorkspace(enabled bool) {
+	m.groupByWorkspace = enabled
+	if enabled {
+		m.workspaceGroups = m.buildWorkspaceGroups()
+	} else {
+		m.workspaceGroups = nil
+	}
+}
+
+// SetWindowSize sets the dimensions of the terminal window.
+func (m *Model) SetWindowSize(width, height int) {
+	m.width = width
+	m.height = height
+}
+
+// SetSessions sets the active session snapshots and refreshes filters and groupings.
+func (m *Model) SetSessions(sessions []session.SessionSnapshot) {
+	m.sessions = sessions
+	m.reapplyFilter()
+}
+
+// buildWorkspaceGroups partitions the filtered sessions into WorkspaceGroup structures.
+func (m Model) buildWorkspaceGroups() []WorkspaceGroup {
+	if len(m.filteredSessions) == 0 {
+		return nil
+	}
+	grouped := make(map[workspace.ID][]session.SessionSnapshot)
+	order := make([]workspace.ID, 0)
+	for _, s := range m.filteredSessions {
+		wsID := s.WorkspaceID
+		if _, ok := grouped[wsID]; !ok {
+			order = append(order, wsID)
+		}
+		grouped[wsID] = append(grouped[wsID], s)
+	}
+
+	result := make([]WorkspaceGroup, 0, len(order))
+	for _, wsID := range order {
+		sessList := grouped[wsID]
+		ws, _ := workspace.New(string(wsID))
+		recs := make([]workspace.SessionRecord, 0, len(sessList))
+		for _, s := range sessList {
+			recs = append(recs, workspace.SessionRecord{
+				ID:         string(s.ID),
+				Workspace:  wsID,
+				Active:     s.Lifecycle.Active(),
+				ObservedAt: s.ObservedAt,
+			})
+		}
+		summary := workspace.SummarizeGroup(ws, recs)
+		result = append(result, WorkspaceGroup{
+			Summary:  summary,
+			Sessions: sessList,
+		})
+	}
+	return result
 }
 
 // AttachTarget returns the session ID to attach into when TUI suspends, if any.

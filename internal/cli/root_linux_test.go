@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/ipc"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/metrics"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/process"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
@@ -133,5 +135,72 @@ func TestOfflineRenameReconcilesStoredActiveProcessBeforeMutation(t *testing.T) 
 			t.Fatal("fixture sleep process did not exit naturally")
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+type cliInspectMetricsClient struct {
+	app.Client
+}
+
+func (cliInspectMetricsClient) Get(context.Context, app.GetRequest) (app.GetResult, error) {
+	now := time.Now().UTC()
+	return app.GetResult{
+		ObservedAt: now,
+		Session: session.SessionSnapshot{
+			ID:          "s-metric-1",
+			Name:        "metrics-test",
+			Authority:   session.AuthorityLive,
+			Lifecycle:   session.LifecycleRunning,
+			WorkspaceID: "/tmp/workspace",
+			ObservedAt:  now,
+		},
+		Metrics: metrics.ProcessMetrics{
+			SampledAt:      now,
+			PID:            4129,
+			CPUPercent:     18.5,
+			MemoryRSSBytes: 40960000,
+			TreeRSSBytes:   81920000,
+			ProcessCount:   2,
+			Uptime:         45 * time.Second,
+		},
+	}, nil
+}
+
+func TestInspectCommandPrintsMetrics(t *testing.T) {
+	paths := config.Paths{StateDir: t.TempDir()}
+	claim, err := ipc.BootstrapPaths(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := ipc.NewServer(claim, cliInspectMetricsClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = server.Serve(ctx) }()
+
+	var stdout, stderr bytes.Buffer
+	root := NewRoot(Options{
+		Paths:  paths,
+		Config: config.Default(),
+		Stdin:  bytes.NewReader(nil),
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	root.SetArgs([]string{"inspect", "s-metric-1"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	outStr := stdout.String()
+	if !strings.Contains(outStr, "cpu: 18.5%") {
+		t.Fatalf("missing cpu in inspect output:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "memory_rss: 40960000") {
+		t.Fatalf("missing memory_rss in inspect output:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "process_count: 2") {
+		t.Fatalf("missing process_count in inspect output:\n%s", outStr)
 	}
 }

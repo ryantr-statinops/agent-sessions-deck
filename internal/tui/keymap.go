@@ -318,6 +318,14 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		m.showDetail = !m.showDetail
 		return m, nil
+	case "w":
+		m.SetGroupByWorkspace(!m.GroupByWorkspace())
+		if m.GroupByWorkspace() {
+			m.setStatus("Grouped by workspace", false, 2*time.Second)
+		} else {
+			m.setStatus("Flat session view", false, 2*time.Second)
+		}
+		return m, nil
 	case "esc":
 		if m.showDetail {
 			m.showDetail = false

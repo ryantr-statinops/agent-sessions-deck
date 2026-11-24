@@ -233,6 +233,12 @@ func (c *Client) Open(ctx context.Context, req app.OpenRequest) (app.OpenResult,
 	return app.OpenResult{Session: header.Session, Lease: header.Lease, Terminal: terminal, Revision: header.Revision, Event: header.Event}, nil
 }
 
+// Workspaces returns summaries of sessions grouped by workspace.
+func (c *Client) Workspaces(ctx context.Context, req app.WorkspacesRequest) (out app.WorkspacesResult, err error) {
+	err = c.call(ctx, OpWorkspaces, req, &out)
+	return
+}
+
 var _ app.Client = (*Client)(nil)
 var _ app.TerminalSubscription = (*remoteSubscription)(nil)
 
