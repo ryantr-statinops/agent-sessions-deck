@@ -43,6 +43,32 @@ const (
 	FrameTerminalClose  FrameType = "terminal_close"
 )
 
+// Supported IPC operation constants.
+const (
+	OpScan       = "scan"
+	OpList       = "list"
+	OpInspect    = "inspect"
+	OpWorkspaces = "workspaces"
+	OpCreate     = "create"
+	OpOpen       = "open"
+	OpDetach     = "detach"
+	OpRename     = "rename"
+	OpRestart    = "restart"
+	OpStop       = "stop"
+	OpKill       = "kill"
+	OpDelete     = "delete"
+)
+
+// ValidOperation reports whether an operation is supported.
+func ValidOperation(op string) bool {
+	switch op {
+	case OpScan, OpList, OpInspect, OpWorkspaces, OpCreate, OpOpen, OpDetach, OpRename, OpRestart, OpStop, OpKill, OpDelete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Frame is the versioned wire envelope. Payload is a single JSON value; terminal
 // byte payloads are base64-encoded by encoding/json and remain subject to the
 // same hard frame cap.
