@@ -108,6 +108,52 @@ func (m Model) renderDashboard() string {
 			emptyMsg = "No matching sessions for query. Press Esc to clear search."
 		}
 		b.WriteString("\n  " + theme.KeyDesc.Render(emptyMsg) + "\n\n")
+	} else if m.groupByWorkspace && len(m.workspaceGroups) > 0 {
+		sessionIdx := 0
+		for _, group := range m.workspaceGroups {
+			gitPart := ""
+			if group.Summary.Git != nil {
+				branch := group.Summary.Git.Branch
+				if group.Summary.Git.Detached {
+					branch = "detached"
+				}
+				if group.Summary.Git.Dirty {
+					branch += "*"
+				}
+				gitPart = fmt.Sprintf(" [%s]", branch)
+			}
+			wsHeader := fmt.Sprintf("📁 %s%s (%d active, %d total)",
+				group.Summary.Workspace.Path(), gitPart, group.Summary.ActiveCount, group.Summary.TotalCount)
+			b.WriteString(theme.DetailTitle.Render(wsHeader) + "\n")
+
+			for _, s := range group.Sessions {
+				sym, _ := StatusIndicator(s.Lifecycle, theme.NoColor)
+				agentStr := string(s.AgentID)
+				if len(agentStr) > 12 {
+					agentStr = agentStr[:11] + "…"
+				}
+				nameStr := s.Name
+				if nameStr == "" {
+					nameStr = string(s.ID)
+				}
+				if len(nameStr) > 18 {
+					nameStr = nameStr[:17] + "…"
+				}
+				attemptStr := fmt.Sprintf("#%d", s.Generation)
+				if s.HasIdentity && s.Identity.PID > 0 {
+					attemptStr = fmt.Sprintf("p%d", s.Identity.PID)
+				}
+				rowText := fmt.Sprintf("  %-4s %-12s %-18s %-8s",
+					sym, agentStr, nameStr, attemptStr)
+
+				if sessionIdx == m.cursor {
+					b.WriteString(theme.SelectedRow.Width(tableWidth).Render(rowText) + "\n")
+				} else {
+					b.WriteString(theme.NormalRow.Width(tableWidth).Render(rowText) + "\n")
+				}
+				sessionIdx++
+			}
+		}
 	} else {
 		// Calculate scrolling viewport
 		startIdx := 0
