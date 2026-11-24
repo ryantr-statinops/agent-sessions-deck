@@ -77,7 +77,7 @@ func (m Model) renderDashboard() string {
 	} else if m.showDetail && width < 100 {
 		// Full screen detail view on narrow terminals
 		if sel, ok := m.SelectedSession(); ok {
-			b.WriteString(RenderDetailPane(sel, theme, width-2) + "\n\n")
+			b.WriteString(RenderDetailPaneCompact(sel, theme, width-2) + "\n\n")
 			b.WriteString(theme.FooterBar.Render("Press 'd' or 'Esc' to return to list") + "\n")
 			return b.String()
 		}

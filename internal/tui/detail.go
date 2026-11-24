@@ -124,3 +124,57 @@ func RenderDetailPane(s session.SessionSnapshot, theme Theme, width int, procMet
 	}
 	return content
 }
+
+// RenderDetailPaneCompact formats inspection information for constrained viewports.
+func RenderDetailPaneCompact(s session.SessionSnapshot, theme Theme, width int, procMetrics ...*metrics.ProcessMetrics) string {
+	var b strings.Builder
+
+	title := theme.DetailTitle.Render("── INSPECTOR ──")
+	b.WriteString(title + "\n")
+
+	renderField := func(label, value string) {
+		l := theme.DetailLabel.Width(10).Render(label + ":")
+		v := theme.DetailValue.Render(value)
+		b.WriteString(fmt.Sprintf("%s %s\n", l, v))
+	}
+
+	renderField("ID", string(s.ID))
+	renderField("Name", s.Name)
+	renderField("Agent", string(s.AgentID))
+	renderField("Workspace", TruncatePath(string(s.WorkspaceID), max(10, width-14)))
+
+	sym, text := StatusIndicator(s.Lifecycle, theme.NoColor)
+	renderField("Status", fmt.Sprintf("%s %s", sym, text))
+
+	if s.HasIdentity && s.Identity.PID > 0 {
+		renderField("PID", fmt.Sprintf("%d", s.Identity.PID))
+	}
+
+	var m *metrics.ProcessMetrics
+	if len(procMetrics) > 0 {
+		m = procMetrics[0]
+	}
+
+	if m != nil && !m.IsZero() && !m.Unavailable {
+		b.WriteString(theme.DetailTitle.Render("── METRICS ──") + "\n")
+		uptimeStr := fmt.Sprintf("%.0fs", m.Uptime.Seconds())
+		if m.Uptime >= time.Minute {
+			uptimeStr = fmt.Sprintf("%dm%ds", int(m.Uptime.Minutes()), int(m.Uptime.Seconds())%60)
+		}
+		renderField("Up", uptimeStr)
+		renderField("CPU", fmt.Sprintf("%.1f%%", m.CPUPercent))
+		renderField("RSS", formatBytes(m.MemoryRSSBytes))
+		if m.TreeRSSBytes > 0 {
+			renderField("Tree", formatBytes(m.TreeRSSBytes))
+		}
+		if m.ProcessCount > 0 {
+			renderField("Procs", fmt.Sprintf("%d", m.ProcessCount))
+		}
+	}
+
+	content := b.String()
+	if width > 0 {
+		return lipgloss.NewStyle().MaxWidth(width).Render(content)
+	}
+	return content
+}
