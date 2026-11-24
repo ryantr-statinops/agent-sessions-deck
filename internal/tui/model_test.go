@@ -70,6 +70,44 @@ func TestModelInitialization(t *testing.T) {
 	}
 }
 
+func TestModelWorkspaceGrouping(t *testing.T) {
+	m := NewModel(Options{})
+	if m.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace false initially")
+	}
+
+	m.sessions = []session.SessionSnapshot{
+		{ID: "s1", WorkspaceID: "/repo/a", Lifecycle: session.LifecycleRunning},
+		{ID: "s2", WorkspaceID: "/repo/a", Lifecycle: session.LifecycleExited},
+		{ID: "s3", WorkspaceID: "/repo/b", Lifecycle: session.LifecycleRunning},
+	}
+	m.filteredSessions = m.sessions
+
+	m.SetGroupByWorkspace(true)
+	if !m.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace true")
+	}
+
+	groups := m.WorkspaceGroups()
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+	if groups[0].Summary.TotalCount != 2 || groups[0].Summary.ActiveCount != 1 {
+		t.Fatalf("unexpected group 0: %+v", groups[0].Summary)
+	}
+	if groups[1].Summary.TotalCount != 1 || groups[1].Summary.ActiveCount != 1 {
+		t.Fatalf("unexpected group 1: %+v", groups[1].Summary)
+	}
+
+	m.SetGroupByWorkspace(false)
+	if m.GroupByWorkspace() {
+		t.Fatalf("expected GroupByWorkspace false after toggle")
+	}
+	if len(m.WorkspaceGroups()) != 0 {
+		t.Fatalf("expected empty groups after disable")
+	}
+}
+
 func TestModelSequenceFencing(t *testing.T) {
 	client := &mockAppClient{}
 	m := NewModel(Options{Client: client})

@@ -5,7 +5,14 @@ import (
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/config"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/owner"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
+
+// WorkspaceGroup represents a grouped slice of sessions under one workspace.
+type WorkspaceGroup struct {
+	Summary  workspace.WorkspaceSummary
+	Sessions []session.SessionSnapshot
+}
 
 // ViewMode defines the active full-screen or overlay mode.
 type ViewMode int
