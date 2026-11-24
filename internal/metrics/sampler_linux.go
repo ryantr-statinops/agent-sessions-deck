@@ -28,12 +28,6 @@ func WithClockTicks(ticks uint64) SamplerOption {
 	}
 }
 
-// SampleRecord stores raw tick counters from a previous observation.
-type SampleRecord struct {
-	SampledAt  time.Time
-	TotalTicks uint64
-}
-
 // SampleProcess reads metrics for a single verified process from procRoot.
 func SampleProcess(procRoot string, identity session.ProcessIdentity, attemptStartedAt time.Time, prev *SampleRecord, now time.Time, opts ...SamplerOption) (ProcessMetrics, SampleRecord, error) {
 	cfg := samplerConfig{clockTicks: defaultClockTicksPerSec}

@@ -4,6 +4,20 @@ import (
 	"time"
 )
 
+// Standard error string constants for ProcessMetrics.Error
+const (
+	ErrProcessExited    = "process-exited"
+	ErrPermissionDenied = "permission-denied"
+	ErrPIDReused        = "pid-reused"
+	ErrPIDNotFound      = "pid-not-found"
+)
+
+// SampleRecord stores raw tick counters from a previous observation.
+type SampleRecord struct {
+	SampledAt  time.Time
+	TotalTicks uint64
+}
+
 // ProcessMetrics captures resource usage and execution state for a verified process.
 type ProcessMetrics struct {
 	SampledAt      time.Time     `json:"sampled_at"`
