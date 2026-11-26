@@ -31,6 +31,8 @@ type Config struct {
 	Terminal Terminal `yaml:"terminal"`
 	// Retention configures session attempt and event journal retention limits.
 	Retention Retention `yaml:"retention"`
+	// MCP configures the Model Context Protocol server.
+	MCP MCP `yaml:"mcp"`
 }
 
 // General holds the dashboard-wide runtime knobs.
@@ -85,6 +87,34 @@ type Retention struct {
 	MaxFinishedSessionAge string `yaml:"max_finished_session_age"`
 }
 
+// MCP configures the Model Context Protocol control plane server.
+type MCP struct {
+	// Enabled indicates if MCP server entrypoints are active.
+	Enabled bool `yaml:"enabled"`
+	// ReadOnly forces read-only mode, rejecting all mutation tools.
+	// Default is true when absent or unset.
+	ReadOnly *bool `yaml:"read_only"`
+	// AllowedTools explicitly whitelists which tools can be invoked.
+	// If empty, all read tools are allowed (and mutation tools if read_only is false).
+	AllowedTools []string `yaml:"allowed_tools"`
+	// AllowedWorkspaces restrains session mutations or operations to canonical directories.
+	AllowedWorkspaces []string `yaml:"allowed_workspaces"`
+	// AllowedAgents limits which agent IDs can be launched or inspected.
+	AllowedAgents []string `yaml:"allowed_agents"`
+	// MaxOutputBytes limits the maximum terminal or screen output bytes returned in a single tool call.
+	MaxOutputBytes int `yaml:"max_output_bytes"`
+	// RateLimitPerMinute limits tool invocations per minute (0 = unlimited).
+	RateLimitPerMinute int `yaml:"rate_limit_per_minute"`
+}
+
+// IsReadOnly returns true if read-only mode is active (defaulting to true).
+func (m MCP) IsReadOnly() bool {
+	if m.ReadOnly == nil {
+		return true
+	}
+	return *m.ReadOnly
+}
+
 // Default returns the small documented defaults used when config.yaml is
 // absent. Nothing in the default writes secrets or points at a real state
 // directory: it is inert until a store opens under it.
@@ -101,8 +131,19 @@ func Default() Config {
 			MaxEventAge:           "720h",
 			MaxFinishedSessionAge: "2160h",
 		},
+		MCP: MCP{
+			Enabled:            true,
+			ReadOnly:           boolPtr(true),
+			AllowedTools:       []string{},
+			AllowedWorkspaces:  []string{},
+			AllowedAgents:      []string{},
+			MaxOutputBytes:     65536,
+			RateLimitPerMinute: 120,
+		},
 	}
 }
+
+func boolPtr(v bool) *bool { return &v }
 
 // EventAgeDuration parses the max event retention age duration.
 func (r Retention) EventAgeDuration() (time.Duration, error) {
@@ -198,6 +239,27 @@ func (c Config) Validate() error {
 	for i, w := range c.Workspaces {
 		if strings.TrimSpace(w.Path) == "" {
 			return fmt.Errorf("workspaces[%d].path: path is empty", i)
+		}
+	}
+	if c.MCP.MaxOutputBytes < 0 {
+		return fmt.Errorf("mcp.max_output_bytes must be non-negative, got %d", c.MCP.MaxOutputBytes)
+	}
+	if c.MCP.RateLimitPerMinute < 0 {
+		return fmt.Errorf("mcp.rate_limit_per_minute must be non-negative, got %d", c.MCP.RateLimitPerMinute)
+	}
+	for i, t := range c.MCP.AllowedTools {
+		if strings.TrimSpace(t) == "" {
+			return fmt.Errorf("mcp.allowed_tools[%d]: tool name cannot be empty", i)
+		}
+	}
+	for i, w := range c.MCP.AllowedWorkspaces {
+		if strings.TrimSpace(w) == "" {
+			return fmt.Errorf("mcp.allowed_workspaces[%d]: workspace path cannot be empty", i)
+		}
+	}
+	for i, a := range c.MCP.AllowedAgents {
+		if strings.TrimSpace(a) == "" {
+			return fmt.Errorf("mcp.allowed_agents[%d]: agent ID cannot be empty", i)
 		}
 	}
 	return nil

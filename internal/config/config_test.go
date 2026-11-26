@@ -19,6 +19,9 @@ func TestLoadAbsentConfigUsesDefaults(t *testing.T) {
 	if cfg.Retention.MaxAttemptsPerSession != 50 || cfg.Retention.MaxEvents != 10000 || cfg.Retention.MaxEventAge != "720h" || cfg.Retention.MaxFinishedSessionAge != "2160h" {
 		t.Fatalf("retention defaults = %+v", cfg.Retention)
 	}
+	if !cfg.MCP.Enabled || !cfg.MCP.IsReadOnly() || cfg.MCP.MaxOutputBytes != 65536 || cfg.MCP.RateLimitPerMinute != 120 {
+		t.Fatalf("mcp defaults = %+v", cfg.MCP)
+	}
 	if len(cfg.Agents) != 0 || len(cfg.Workspaces) != 0 {
 		t.Fatalf("defaults should declare nothing: %+v", cfg)
 	}
@@ -225,5 +228,86 @@ func TestParseRejectsMalformedTrailingYAMLDocument(t *testing.T) {
 	_, err := Parse([]byte("general:\n  refresh_interval: 2s\n---\n: [unclosed\n"))
 	if err == nil || !strings.Contains(err.Error(), "malformed trailing") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestParseMCPConfig(t *testing.T) {
+	cfg, err := Parse([]byte(`
+mcp:
+  enabled: true
+  read_only: false
+  allowed_tools:
+    - list_sessions
+    - get_session
+  allowed_workspaces:
+    - /home/user/work
+  allowed_agents:
+    - opencode
+  max_output_bytes: 32768
+  rate_limit_per_minute: 60
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !cfg.MCP.Enabled {
+		t.Fatalf("expected enabled")
+	}
+	if cfg.MCP.IsReadOnly() {
+		t.Fatalf("expected read_only false")
+	}
+	if len(cfg.MCP.AllowedTools) != 2 || cfg.MCP.AllowedTools[0] != "list_sessions" {
+		t.Fatalf("allowed_tools = %+v", cfg.MCP.AllowedTools)
+	}
+	if len(cfg.MCP.AllowedWorkspaces) != 1 || cfg.MCP.AllowedWorkspaces[0] != "/home/user/work" {
+		t.Fatalf("allowed_workspaces = %+v", cfg.MCP.AllowedWorkspaces)
+	}
+	if len(cfg.MCP.AllowedAgents) != 1 || cfg.MCP.AllowedAgents[0] != "opencode" {
+		t.Fatalf("allowed_agents = %+v", cfg.MCP.AllowedAgents)
+	}
+	if cfg.MCP.MaxOutputBytes != 32768 || cfg.MCP.RateLimitPerMinute != 60 {
+		t.Fatalf("bounds = %+v", cfg.MCP)
+	}
+}
+
+func TestMCPValidationRejections(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		err  string
+	}{
+		{
+			name: "negative max_output_bytes",
+			yaml: "mcp:\n  max_output_bytes: -1\n",
+			err:  "mcp.max_output_bytes",
+		},
+		{
+			name: "negative rate_limit_per_minute",
+			yaml: "mcp:\n  rate_limit_per_minute: -1\n",
+			err:  "mcp.rate_limit_per_minute",
+		},
+		{
+			name: "empty tool name",
+			yaml: "mcp:\n  allowed_tools:\n    - \"   \"\n",
+			err:  "mcp.allowed_tools",
+		},
+		{
+			name: "empty workspace path",
+			yaml: "mcp:\n  allowed_workspaces:\n    - \"\"\n",
+			err:  "mcp.allowed_workspaces",
+		},
+		{
+			name: "empty agent id",
+			yaml: "mcp:\n  allowed_agents:\n    - \" \"\n",
+			err:  "mcp.allowed_agents",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse([]byte(tc.yaml))
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("expected error containing %q, got %v", tc.err, err)
+			}
+		})
 	}
 }
