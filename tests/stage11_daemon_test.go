@@ -18,7 +18,11 @@ import (
 )
 
 func newStage11TestEnv(t *testing.T) (config.Paths, config.Config) {
-	root := t.TempDir()
+	root, err := os.MkdirTemp("", "asd-d11-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	paths := config.Paths{
 		ConfigDir:  filepath.Join(root, "config"),
 		StateDir:   filepath.Join(root, "state"),
