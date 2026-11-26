@@ -18,9 +18,9 @@ type fakeTerminalSubscription struct {
 	closed     bool
 }
 
-func (s *fakeTerminalSubscription) SessionID() session.ID             { return s.sessionID }
-func (s *fakeTerminalSubscription) Generation() session.Generation   { return s.generation }
-func (s *fakeTerminalSubscription) Holder() string                   { return s.holder }
+func (s *fakeTerminalSubscription) SessionID() session.ID          { return s.sessionID }
+func (s *fakeTerminalSubscription) Generation() session.Generation { return s.generation }
+func (s *fakeTerminalSubscription) Holder() string                 { return s.holder }
 func (s *fakeTerminalSubscription) InitialSnapshot() app.TerminalSnapshot {
 	return s.snapshot
 }
