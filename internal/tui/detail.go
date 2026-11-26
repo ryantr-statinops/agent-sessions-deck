@@ -52,6 +52,17 @@ func RenderDetailPane(s session.SessionSnapshot, theme Theme, width int, procMet
 	// Attempt info
 	renderField("Attempt Gen", fmt.Sprintf("%d (Total attempts: %d)", s.Generation, s.AttemptCount))
 
+	if s.AttemptCount > 1 {
+		renderField("Past Attempts", fmt.Sprintf("%d previous execution(s) recorded", s.AttemptCount-1))
+	}
+
+	// Terminal status notice
+	if s.Lifecycle.Terminal() {
+		renderField("Terminal", "Closed: session terminated (no live PTY)")
+	} else if s.Lifecycle.Active() {
+		renderField("Terminal", "Active live PTY available")
+	}
+
 	// Process info
 	if s.HasIdentity && s.Identity.PID > 0 {
 		renderField("Process PID", fmt.Sprintf("%d", s.Identity.PID))
