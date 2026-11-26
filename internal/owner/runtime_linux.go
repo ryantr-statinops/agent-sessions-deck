@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
@@ -62,7 +63,13 @@ func StartMode(ctx context.Context, paths config.Paths, cfg config.Config, mode 
 		}
 		return nil, err
 	}
-	service, err := buildService(ctx, paths, cfg, claim.SessionsStore(paths.SessionsFile()), claim.InstanceID(), session.AuthorityLive)
+	eventsPath := filepath.Join(paths.StateDir, "events.jsonl")
+	journal, err := claim.EventJournal(eventsPath)
+	if err != nil {
+		_ = claim.Close()
+		return nil, err
+	}
+	service, err := buildService(ctx, paths, cfg, claim.SessionsStore(paths.SessionsFile()), journal, claim.InstanceID(), session.AuthorityLive)
 	if err != nil {
 		_ = claim.Close()
 		return nil, err
@@ -87,13 +94,15 @@ func Offline(ctx context.Context, paths config.Paths, cfg config.Config) (*app.S
 		return nil, err
 	}
 	st := store.NewSessionsStore(paths.SessionsFile(), paths.LockPath())
-	return buildService(ctx, paths, cfg, st, id, session.AuthorityStored)
+	eventsPath := filepath.Join(paths.StateDir, "events.jsonl")
+	journal, _ := store.NewEventJournal(eventsPath, paths.LockPath())
+	return buildService(ctx, paths, cfg, st, journal, id, session.AuthorityStored)
 }
 
 // Serve runs the foreground owner until shutdown and releases its lock last.
 func (r *Runtime) Serve(ctx context.Context) error { return r.server.Serve(ctx) }
 
-func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st app.SessionStore, ownerID string, authority session.Authority) (*app.Service, error) {
+func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st app.SessionStore, journal app.EventJournalStore, ownerID string, authority session.Authority) (*app.Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -128,6 +137,22 @@ func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st
 	if err != nil {
 		return nil, err
 	}
+
+	var pubOpts []events.Option
+	if journal != nil && journal.LastRevision() > 0 {
+		pubOpts = append(pubOpts, events.WithInitialRevision(events.Revision(journal.LastRevision())))
+	}
+	publisher := events.NewPublisher(pubOpts...)
+
+	var serviceOpts []app.Option
+	serviceOpts = append(serviceOpts,
+		app.WithAuthority(authority),
+		app.WithGitCache(app.NewGitThrottleCache(app.DefaultGitThrottleTTL, gitClient.Probe, nil)),
+	)
+	if journal != nil {
+		serviceOpts = append(serviceOpts, app.WithEventJournal(journal))
+	}
+
 	return app.NewService(ctx, app.Deps{
 		Registry:   registry,
 		Workspaces: resolver,
@@ -135,10 +160,10 @@ func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st
 		Runtime:    runtime,
 		Leases:     newLeaseBroker(),
 		Terminals:  runtime.Terminals(),
-		Events:     events.NewPublisher(),
+		Events:     publisher,
 		Clock:      app.SystemClock{},
 		IDs:        app.RandomIDMinter{},
-	}, app.WithAuthority(authority), app.WithGitCache(app.NewGitThrottleCache(app.DefaultGitThrottleTTL, gitClient.Probe, nil)))
+	}, serviceOpts...)
 }
 
 func randomOwnerID() (string, error) {
