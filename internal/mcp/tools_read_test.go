@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
 func TestToolListAgents(t *testing.T) {
@@ -82,5 +83,85 @@ func TestToolListWorkspaces(t *testing.T) {
 	}
 	if len(toolRes.Content) != 1 || !strings.Contains(toolRes.Content[0].Text, "project-a") {
 		t.Fatalf("unexpected content: %+v", toolRes)
+	}
+}
+
+func TestToolGetWorkspace(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		workspacesResult: app.WorkspacesResult{
+			Workspaces: sampleWorkspaces(),
+		},
+	}
+
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+
+	// 1. Success matching path
+	args, _ := json.Marshal(map[string]any{"path": "/home/user/project-a"})
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "get_workspace",
+		Arguments: args,
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("call failed: err=%v resp=%+v", err, resp)
+	}
+	var toolRes CallToolResult
+	_ = json.Unmarshal(resp.Result, &toolRes)
+	if len(toolRes.Content) == 0 || !strings.Contains(toolRes.Content[0].Text, "project-a") {
+		t.Fatalf("unexpected content: %+v", toolRes)
+	}
+
+	// 2. Not found
+	argsNotFound, _ := json.Marshal(map[string]any{"path": "/home/user/unknown"})
+	reqNotFound, _ := NewRequest(json.RawMessage("2"), "tools/call", CallToolParams{
+		Name:      "get_workspace",
+		Arguments: argsNotFound,
+	})
+	respNotFound, _, err := srv.HandleMessage(ctx, reqNotFound)
+	if err != nil || respNotFound.Error != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	var toolResNotFound CallToolResult
+	_ = json.Unmarshal(respNotFound.Result, &toolResNotFound)
+	if !toolResNotFound.IsError || !strings.Contains(toolResNotFound.Content[0].Text, "not found") {
+		t.Fatalf("expected error result: %+v", toolResNotFound)
+	}
+}
+
+func TestToolGetProcess(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		getResult: app.GetResult{
+			Session: session.SessionSnapshot{
+				ID:          session.ID("sess-abc12345"),
+				Lifecycle:   session.LifecycleRunning,
+				Generation:  1,
+				HasIdentity: true,
+				Identity: session.ProcessIdentity{
+					PID: 9876,
+				},
+			},
+		},
+	}
+
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+	args, _ := json.Marshal(map[string]any{"session_id": "sess-abc12345"})
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "get_process",
+		Arguments: args,
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	var toolRes CallToolResult
+	_ = json.Unmarshal(resp.Result, &toolRes)
+	if len(toolRes.Content) == 0 || !strings.Contains(toolRes.Content[0].Text, "9876") {
+		t.Fatalf("expected PID in process report: %+v", toolRes)
 	}
 }
