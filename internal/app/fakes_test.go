@@ -661,7 +661,15 @@ func (p *capturingPublisher) PublishRevisioned(revision events.Revision, spec ev
 		return events.Event{}, events.ErrInvalidType
 	}
 	p.specs = append(p.specs, capturedEvent{revision: revision, spec: spec})
-	return events.Event{}, nil
+	evID := spec.ID
+	if evID == "" {
+		evID = events.ID(fmt.Sprintf("evt-%06d", revision))
+	}
+	evTime := spec.Time
+	if evTime.Time().IsZero() {
+		evTime = events.NewTimestamp(time.Now())
+	}
+	return events.NewEvent(evID, spec.Type, spec.Session, spec.Attempt, revision, evTime, spec.Metadata), nil
 }
 
 func (p *capturingPublisher) all() []capturedEvent {
