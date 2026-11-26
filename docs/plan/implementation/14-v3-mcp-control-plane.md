@@ -1,6 +1,6 @@
 # Stage 14 — V3 MCP control plane
 
-Trạng thái: `PLANNED` · Milestone: M4 · Phụ thuộc: 11, 12, 13 · Cỡ việc: L.
+Trạng thái: `DONE` · Milestone: M4 · Phụ thuộc: 11, 12, 13 · Cỡ việc: L.
 
 ## Mục tiêu
 
@@ -12,19 +12,19 @@ Cho AI client truy vấn và thực hiện các thao tác ASD đã cấu hình, 
 
 ## Checklist thực thi
 
-- [ ] Đối chiếu specification/official Go SDK tại thời điểm triển khai; chốt protocol version, client compatibility và transport. Đề xuất stdio local, không network listener mặc định.
-- [ ] MCP server là client của `agentd`, không có SessionManager/store writer thứ hai; daemon absent có actionable error, không ngầm launch agent session.
-- [ ] Read tools: list_agents/list_sessions/get_session/find_session/list_workspaces/get_workspace/get_process/get_recent_events, stable IDs và bounded pagination.
-- [ ] `start_session` (hợp nhất tên `start_asd` draft), stop_session/restart_session, interact_session chỉ qua app service; annotations/schema phản ánh read-only/destructive behavior.
-- [ ] Default read-only; config grant mutations theo tool/agent IDs/workspace scope. Raw executable/argv/env do MCP client cung cấp bị từ chối mặc định.
-- [ ] Canonical workspace allowlist, symlink/traversal handling, configured launch templates; path prefix string không đủ để chứng minh nằm trong workspace scope.
-- [ ] Mutation request IDs + session attempt generation, rate/concurrency limits; retries hoặc timeout không duplicate launch/restart/input.
-- [ ] Destructive tool policy có approval/grant rõ ở app layer; không dựa riêng vào prompt hoặc MCP tool annotations làm enforcement. Noninteractive server không treo đợi TUI confirm; trả approval-required nếu thiếu grant.
-- [ ] Chốt interact_session: bounded screen read theo cursor/sequence; input write explicit bytes/text encoding và expected attempt. Cùng lease arbitration với human TUI, không giành input session đang có user.
-- [ ] Terminal output là dữ liệu không đáng tin; responses phân biệt metadata và content, cap bytes, không tự thực thi instructions từ output.
-- [ ] Audit mutation metadata (tool/session/attempt/time/result), không log input/prompt/secret mặc định; permission error typed và actionable.
-- [ ] Cancellation/connection loss chỉ kết thúc request/subscription, không kill child; query timeout không mở thread xử lý vô hạn.
-- [ ] Docs nêu local OS trust model, scope config, opt-in mutations, sample read-only setup và phiên bản clients đã kiểm tra.
+- [x] Đối chiếu specification/official Go SDK tại thời điểm triển khai; chốt protocol version, client compatibility và transport. Đề xuất stdio local, không network listener mặc định.
+- [x] MCP server là client của `agentd`, không có SessionManager/store writer thứ hai; daemon absent có actionable error, không ngầm launch agent session.
+- [x] Read tools: list_agents/list_sessions/get_session/find_session/list_workspaces/get_workspace/get_process/get_recent_events, stable IDs và bounded pagination.
+- [x] `start_session` (hợp nhất tên `start_asd` draft), stop_session/restart_session, interact_session chỉ qua app service; annotations/schema phản ánh read-only/destructive behavior.
+- [x] Default read-only; config grant mutations theo tool/agent IDs/workspace scope. Raw executable/argv/env do MCP client cung cấp bị từ chối mặc định.
+- [x] Canonical workspace allowlist, symlink/traversal handling, configured launch templates; path prefix string không đủ để chứng minh nằm trong workspace scope.
+- [x] Mutation request IDs + session attempt generation, rate/concurrency limits; retries hoặc timeout không duplicate launch/restart/input.
+- [x] Destructive tool policy có approval/grant rõ ở app layer; không dựa riêng vào prompt hoặc MCP tool annotations làm enforcement. Noninteractive server không treo đợi TUI confirm; trả approval-required nếu thiếu grant.
+- [x] Chốt interact_session: bounded screen read theo cursor/sequence; input write explicit bytes/text encoding và expected attempt. Cùng lease arbitration với human TUI, không giành input session đang có user.
+- [x] Terminal output là dữ liệu không đáng tin; responses phân biệt metadata và content, cap bytes, không tự thực thi instructions từ output.
+- [x] Audit mutation metadata (tool/session/attempt/time/result), không log input/prompt/secret mặc định; permission error typed và actionable.
+- [x] Cancellation/connection loss chỉ kết thúc request/subscription, không kill child; query timeout không mở thread xử lý vô hạn.
+- [x] Docs nêu local OS trust model, scope config, opt-in mutations, sample read-only setup và phiên bản clients đã kiểm tra.
 
 ## Acceptance và verification
 
