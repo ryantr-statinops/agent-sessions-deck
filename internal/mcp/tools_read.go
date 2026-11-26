@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
 // RegisterReadTools registers all Stage 14 read-only tools on the MCP server.
@@ -14,6 +16,9 @@ func RegisterReadTools(s *Server, client ControlPlaneClient) {
 	registerListWorkspaces(s, client)
 	registerGetWorkspace(s, client)
 	registerGetProcess(s, client)
+	registerListSessions(s, client)
+	registerGetSession(s, client)
+	registerFindSession(s, client)
 }
 
 func registerListAgents(s *Server, client ControlPlaneClient) {
@@ -176,5 +181,163 @@ func registerGetProcess(s *Server, client ControlPlaneClient) {
 		}
 
 		return NewJSONResult(report)
+	})
+}
+
+// SessionSummaryDTO represents a clean JSON representation of a session.
+type SessionSummaryDTO struct {
+	ID         string `json:"id"`
+	Name       string `json:"name,omitempty"`
+	AgentID    string `json:"agent_id"`
+	Lifecycle  string `json:"lifecycle"`
+	Generation int    `json:"generation"`
+	PID        int    `json:"pid,omitempty"`
+	Authority  string `json:"authority"`
+	LastSeenAt string `json:"last_seen_at,omitempty"`
+}
+
+func toSessionSummaryDTO(row session.SessionSnapshot) SessionSummaryDTO {
+	dto := SessionSummaryDTO{
+		ID:         row.ID.String(),
+		Name:       row.Name,
+		AgentID:    string(row.AgentID),
+		Lifecycle:  row.Lifecycle.String(),
+		Generation: int(row.Generation),
+		Authority:  row.Authority.String(),
+	}
+	if row.HasIdentity {
+		dto.PID = row.Identity.PID
+	}
+	if !row.LastSeenAt.IsZero() {
+		dto.LastSeenAt = row.LastSeenAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+	return dto
+}
+
+func registerListSessions(s *Server, client ControlPlaneClient) {
+	s.RegisterTool(Tool{
+		Name:        "list_sessions",
+		Description: "List coding-agent sessions with optional status and agent filters.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]PropertyDef{
+				"status": {
+					Type:        "string",
+					Description: "Filter by lifecycle status ('RUNNING', 'STOPPED', 'FAILED', 'CREATED')",
+				},
+				"agent": {
+					Type:        "string",
+					Description: "Filter by agent ID (e.g. 'opencode')",
+				},
+			},
+		},
+		Annotations: &ToolAnnotation{ReadOnly: true},
+	}, func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+		var input struct {
+			Status string `json:"status"`
+			Agent  string `json:"agent"`
+		}
+		if len(args) > 0 {
+			_ = json.Unmarshal(args, &input)
+		}
+
+		req := app.ListRequest{}
+		if input.Agent != "" {
+			req.AgentID = agent.ID(input.Agent)
+		}
+		if input.Status != "" {
+			req.Lifecycles = []session.Lifecycle{session.Lifecycle(input.Status)}
+		}
+
+		res, err := client.List(ctx, req)
+		if err != nil {
+			return NewErrorResult(fmt.Sprintf("failed to list sessions: %v", err)), nil
+		}
+
+		out := make([]SessionSummaryDTO, 0, len(res.Snapshot.Sessions))
+		for _, row := range res.Snapshot.Sessions {
+			out = append(out, toSessionSummaryDTO(row))
+		}
+		return NewJSONResult(out)
+	})
+}
+
+func registerGetSession(s *Server, client ControlPlaneClient) {
+	s.RegisterTool(Tool{
+		Name:        "get_session",
+		Description: "Get complete metadata snapshot for a specific session by full ID or unambiguous prefix.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]PropertyDef{
+				"session_id": {
+					Type:        "string",
+					Description: "Full session ID or prefix",
+				},
+			},
+			Required: []string{"session_id"},
+		},
+		Annotations: &ToolAnnotation{ReadOnly: true},
+	}, func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+		var input struct {
+			SessionID string `json:"session_id"`
+		}
+		if err := json.Unmarshal(args, &input); err != nil || input.SessionID == "" {
+			return NewErrorResult("get_session requires 'session_id'"), nil
+		}
+
+		res, err := client.Get(ctx, app.GetRequest{Ref: input.SessionID})
+		if err != nil {
+			return NewErrorResult(fmt.Sprintf("failed to get session %q: %v", input.SessionID, err)), nil
+		}
+
+		return NewJSONResult(res.Session)
+	})
+}
+
+func registerFindSession(s *Server, client ControlPlaneClient) {
+	s.RegisterTool(Tool{
+		Name:        "find_session",
+		Description: "Find sessions matching query criteria such as agent ID or lifecycle status.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]PropertyDef{
+				"agent": {
+					Type:        "string",
+					Description: "Agent ID to search for",
+				},
+				"status": {
+					Type:        "string",
+					Description: "Session lifecycle status ('RUNNING', 'STOPPED', etc.)",
+				},
+			},
+		},
+		Annotations: &ToolAnnotation{ReadOnly: true},
+	}, func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+		var input struct {
+			Agent  string `json:"agent"`
+			Status string `json:"status"`
+		}
+		if len(args) > 0 {
+			_ = json.Unmarshal(args, &input)
+		}
+
+		req := app.ListRequest{}
+		if input.Agent != "" {
+			req.AgentID = agent.ID(input.Agent)
+		}
+		if input.Status != "" {
+			req.Lifecycles = []session.Lifecycle{session.Lifecycle(input.Status)}
+		}
+
+		res, err := client.List(ctx, req)
+		if err != nil {
+			return NewErrorResult(fmt.Sprintf("failed to query sessions: %v", err)), nil
+		}
+
+		out := make([]SessionSummaryDTO, 0, len(res.Snapshot.Sessions))
+		for _, row := range res.Snapshot.Sessions {
+			out = append(out, toSessionSummaryDTO(row))
+		}
+		return NewJSONResult(out)
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
@@ -163,5 +164,95 @@ func TestToolGetProcess(t *testing.T) {
 	_ = json.Unmarshal(resp.Result, &toolRes)
 	if len(toolRes.Content) == 0 || !strings.Contains(toolRes.Content[0].Text, "9876") {
 		t.Fatalf("expected PID in process report: %+v", toolRes)
+	}
+}
+
+func TestToolSessionsOperations(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		listResult: app.ListResult{
+			Snapshot: session.Snapshot{
+				Sessions: []session.SessionSnapshot{
+					{
+						ID:          session.ID("sess-1111"),
+						AgentID:     agent.ID("opencode"),
+						Lifecycle:   session.LifecycleRunning,
+						Generation:  1,
+						HasIdentity: true,
+						Identity: session.ProcessIdentity{
+							PID: 1111,
+						},
+					},
+					{
+						ID:          session.ID("sess-2222"),
+						AgentID:     agent.ID("claude"),
+						Lifecycle:   session.LifecycleExited,
+						Generation:  2,
+						HasIdentity: true,
+						Identity: session.ProcessIdentity{
+							PID: 2222,
+						},
+					},
+				},
+			},
+		},
+		getResult: app.GetResult{
+			Session: session.SessionSnapshot{
+				ID:         session.ID("sess-1111"),
+				AgentID:    agent.ID("opencode"),
+				Lifecycle:  session.LifecycleRunning,
+				Generation: 1,
+			},
+		},
+	}
+
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+
+	// 1. list_sessions
+	reqList, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name: "list_sessions",
+	})
+	respList, _, err := srv.HandleMessage(ctx, reqList)
+	if err != nil || respList.Error != nil {
+		t.Fatalf("list_sessions failed: %v", err)
+	}
+	var resList CallToolResult
+	_ = json.Unmarshal(respList.Result, &resList)
+	if len(resList.Content) == 0 || !strings.Contains(resList.Content[0].Text, "sess-1111") || !strings.Contains(resList.Content[0].Text, "sess-2222") {
+		t.Fatalf("unexpected list_sessions content: %+v", resList)
+	}
+
+	// 2. get_session
+	argsGet, _ := json.Marshal(map[string]any{"session_id": "sess-1111"})
+	reqGet, _ := NewRequest(json.RawMessage("2"), "tools/call", CallToolParams{
+		Name:      "get_session",
+		Arguments: argsGet,
+	})
+	respGet, _, err := srv.HandleMessage(ctx, reqGet)
+	if err != nil || respGet.Error != nil {
+		t.Fatalf("get_session failed: %v", err)
+	}
+	var resGet CallToolResult
+	_ = json.Unmarshal(respGet.Result, &resGet)
+	if len(resGet.Content) == 0 || !strings.Contains(resGet.Content[0].Text, "sess-1111") {
+		t.Fatalf("unexpected get_session content: %+v", resGet)
+	}
+
+	// 3. find_session
+	argsFind, _ := json.Marshal(map[string]any{"agent": "opencode"})
+	reqFind, _ := NewRequest(json.RawMessage("3"), "tools/call", CallToolParams{
+		Name:      "find_session",
+		Arguments: argsFind,
+	})
+	respFind, _, err := srv.HandleMessage(ctx, reqFind)
+	if err != nil || respFind.Error != nil {
+		t.Fatalf("find_session failed: %v", err)
+	}
+	var resFind CallToolResult
+	_ = json.Unmarshal(respFind.Result, &resFind)
+	if len(resFind.Content) == 0 || !strings.Contains(resFind.Content[0].Text, "sess-1111") {
+		t.Fatalf("unexpected find_session content: %+v", resFind)
 	}
 }
