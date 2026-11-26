@@ -18,6 +18,8 @@ type Server struct {
 	tools       map[string]registeredTool
 	toolOrder   []string
 	policy      *PolicyEngine
+	idempotency *IdempotencyManager
+	audit       *AuditLogger
 }
 
 type registeredTool struct {
@@ -30,9 +32,11 @@ type ToolHandler func(ctx context.Context, args json.RawMessage) (CallToolResult
 
 // ServerOptions configures the MCP server.
 type ServerOptions struct {
-	Name    string
-	Version string
-	Policy  *PolicyEngine
+	Name        string
+	Version     string
+	Policy      *PolicyEngine
+	Idempotency *IdempotencyManager
+	Audit       *AuditLogger
 }
 
 // NewServer initializes an MCP server.
@@ -44,13 +48,24 @@ func NewServer(opts ServerOptions) *Server {
 		opts.Version = "dev"
 	}
 	return &Server{
-		name:      opts.Name,
-		version:   opts.Version,
-		tools:     make(map[string]registeredTool),
-		toolOrder: make([]string, 0),
-		policy:    opts.Policy,
+		name:        opts.Name,
+		version:     opts.Version,
+		tools:       make(map[string]registeredTool),
+		toolOrder:   make([]string, 0),
+		policy:      opts.Policy,
+		idempotency: opts.Idempotency,
+		audit:       opts.Audit,
 	}
 }
+
+// Policy returns the configured PolicyEngine.
+func (s *Server) Policy() *PolicyEngine { return s.policy }
+
+// Idempotency returns the configured IdempotencyManager.
+func (s *Server) Idempotency() *IdempotencyManager { return s.idempotency }
+
+// Audit returns the configured AuditLogger.
+func (s *Server) Audit() *AuditLogger { return s.audit }
 
 // RegisterTool registers an available tool on the server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
