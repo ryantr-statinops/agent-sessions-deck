@@ -93,6 +93,8 @@ func newRootCommand(paths config.Paths, cfg config.Config, stdout, stderr io.Wri
 	}
 
 	root.Flags().BoolVarP(&foreground, "foreground", "f", false, "run daemon in foreground")
+	root.SetOut(stdout)
+	root.SetErr(stderr)
 	root.Version = buildVersion
 	root.Annotations = map[string]string{"commit": buildCommit, "date": buildDate}
 	root.CompletionOptions.DisableDefaultCmd = true
