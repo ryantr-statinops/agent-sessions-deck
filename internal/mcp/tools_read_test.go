@@ -289,3 +289,71 @@ func TestToolGetRecentEvents(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
+
+func TestReadToolsListContract(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{}
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+	req, _ := NewRequest(json.RawMessage("1"), "tools/list", nil)
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("tools/list failed: %v", err)
+	}
+
+	var listRes ListToolsResult
+	if err := json.Unmarshal(resp.Result, &listRes); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+
+	expectedTools := []string{
+		"list_agents",
+		"list_workspaces",
+		"get_workspace",
+		"get_process",
+		"list_sessions",
+		"get_session",
+		"find_session",
+		"get_recent_events",
+	}
+
+	toolMap := make(map[string]Tool)
+	for _, tool := range listRes.Tools {
+		toolMap[tool.Name] = tool
+		if tool.Annotations == nil || !tool.Annotations.ReadOnly {
+			t.Fatalf("tool %q must have ReadOnly annotation", tool.Name)
+		}
+		if tool.InputSchema.Type != "object" {
+			t.Fatalf("tool %q input schema type must be 'object'", tool.Name)
+		}
+	}
+
+	for _, expected := range expectedTools {
+		if _, ok := toolMap[expected]; !ok {
+			t.Fatalf("missing expected tool: %q", expected)
+		}
+	}
+}
+
+func TestReadToolsErrorHandling(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		scanErr: context.DeadlineExceeded,
+	}
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name: "list_agents",
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("call should return successful JSON-RPC message containing isError tool result: %v", err)
+	}
+	var res CallToolResult
+	_ = json.Unmarshal(resp.Result, &res)
+	if !res.IsError || !strings.Contains(res.Content[0].Text, "context deadline exceeded") {
+		t.Fatalf("expected error result: %+v", res)
+	}
+}
