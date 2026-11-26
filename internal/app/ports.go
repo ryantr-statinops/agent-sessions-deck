@@ -39,6 +39,13 @@ type (
 	LeaseBroker = session.LeaseBroker
 )
 
+// EventJournalStore persists and queries event streams.
+type EventJournalStore interface {
+	Append(ctx context.Context, ev events.Event) error
+	Query(ctx context.Context, filter events.JournalFilter) ([]events.Event, uint64, error)
+	LastRevision() uint64
+}
+
 // TerminalSubscription is the interactive stream claim the owner hands to an
 // attached client. The initial snapshot and following frames form an ordered
 // screen stream; the raw byte stream remains available for byte-oriented clients.

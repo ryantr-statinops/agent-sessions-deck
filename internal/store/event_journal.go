@@ -25,13 +25,8 @@ const MaxEventQueryLimit = 1000
 // does not advance strictly past the journal's last known revision.
 var ErrNonMonotonicRevision = errors.New("event revision must be strictly greater than last journal revision")
 
-// EventFilter specifies filtering and pagination parameters for journal queries.
-type EventFilter struct {
-	SessionID     events.SessionID
-	Type          events.Type
-	AfterRevision uint64
-	Limit         int
-}
+// EventFilter aliases events.JournalFilter for backwards compatibility within the store package.
+type EventFilter = events.JournalFilter
 
 // EventJournal provides durable, append-only persistence for event streams.
 // Revisions are guaranteed to increase monotonically across writes and restarts.

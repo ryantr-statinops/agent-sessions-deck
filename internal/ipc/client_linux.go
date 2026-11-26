@@ -239,6 +239,18 @@ func (c *Client) Workspaces(ctx context.Context, req app.WorkspacesRequest) (out
 	return
 }
 
+// History returns session history matching optional filters.
+func (c *Client) History(ctx context.Context, req app.HistoryRequest) (out app.HistoryResult, err error) {
+	err = c.call(ctx, OpHistory, req, &out)
+	return
+}
+
+// Events returns persistent events matching optional filters.
+func (c *Client) Events(ctx context.Context, req app.EventsRequest) (out app.EventsResult, err error) {
+	err = c.call(ctx, OpEvents, req, &out)
+	return
+}
+
 var _ app.Client = (*Client)(nil)
 var _ app.TerminalSubscription = (*remoteSubscription)(nil)
 

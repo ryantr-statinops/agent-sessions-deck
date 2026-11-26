@@ -574,6 +574,74 @@ type Client interface {
 	Kill(ctx context.Context, req KillRequest) (KillResult, error)
 	// Delete removes a finished session's metadata and refuses while it is active.
 	Delete(ctx context.Context, req DeleteRequest) (DeleteResult, error)
+	// History returns session history matching optional filters.
+	History(ctx context.Context, req HistoryRequest) (HistoryResult, error)
+	// Events returns persistent events matching optional filters.
+	Events(ctx context.Context, req EventsRequest) (EventsResult, error)
+}
+
+// HistoryRequest queries session history and attempt metadata.
+type HistoryRequest struct {
+	AgentID         string `json:"agent_id,omitempty"`
+	WorkspaceID     string `json:"workspace_id,omitempty"`
+	Status          string `json:"status,omitempty"` // "active", "finished", or empty ("all")
+	Since           string `json:"since,omitempty"`  // RFC3339 timestamp
+	Until           string `json:"until,omitempty"`  // RFC3339 timestamp
+	Limit           int    `json:"limit,omitempty"`
+	Offset          int    `json:"offset,omitempty"`
+	IncludeAttempts bool   `json:"include_attempts,omitempty"`
+}
+
+// AttemptHistory contains metadata for a single past or current attempt.
+type AttemptHistory struct {
+	Generation  uint64    `json:"generation"`
+	StartedAt   time.Time `json:"started_at"`
+	RunningAt   time.Time `json:"running_at,omitempty"`
+	EndedAt     time.Time `json:"ended_at,omitempty"`
+	Duration    string    `json:"duration,omitempty"`
+	Lifecycle   string    `json:"lifecycle"`
+	Reason      string    `json:"reason,omitempty"`
+	ExitCode    int       `json:"exit_code,omitempty"`
+	HasExitCode bool      `json:"has_exit_code"`
+	Command     string    `json:"command,omitempty"`
+}
+
+// SessionHistory represents one session's history and attempts.
+type SessionHistory struct {
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	AgentID      string           `json:"agent_id"`
+	WorkspaceID  string           `json:"workspace_id"`
+	CreatedAt    time.Time        `json:"created_at"`
+	UpdatedAt    time.Time        `json:"updated_at"`
+	Lifecycle    string           `json:"lifecycle"`
+	Generation   uint64           `json:"generation"`
+	AttemptCount int              `json:"attempt_count"`
+	Attempts     []AttemptHistory `json:"attempts,omitempty"`
+}
+
+// HistoryResult holds the query result for session history.
+type HistoryResult struct {
+	Authority  session.Authority `json:"authority"`
+	ObservedAt time.Time         `json:"observed_at"`
+	Sessions   []SessionHistory  `json:"sessions"`
+	TotalCount int               `json:"total_count"`
+}
+
+// EventsRequest queries the event journal.
+type EventsRequest struct {
+	SessionID     string `json:"session_id,omitempty"`
+	Type          string `json:"type,omitempty"`
+	AfterRevision uint64 `json:"after_revision,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+}
+
+// EventsResult returns events matching an EventsRequest.
+type EventsResult struct {
+	Authority    session.Authority `json:"authority"`
+	ObservedAt   time.Time         `json:"observed_at"`
+	Events       []events.Event    `json:"events"`
+	NextRevision uint64            `json:"next_revision"`
 }
 
 func validateRef(ref string) error {

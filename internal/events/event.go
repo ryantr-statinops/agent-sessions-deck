@@ -106,6 +106,14 @@ func (s Spec) validate() error {
 	return nil
 }
 
+// JournalFilter specifies filtering and pagination parameters for persistent event queries.
+type JournalFilter struct {
+	SessionID     SessionID `json:"session_id,omitempty"`
+	Type          Type      `json:"type,omitempty"`
+	AfterRevision uint64    `json:"after_revision,omitempty"`
+	Limit         int       `json:"limit,omitempty"`
+}
+
 // Event is one published metadata event: an immutable value that a publisher
 // created and subscribers only read.
 type Event struct {
