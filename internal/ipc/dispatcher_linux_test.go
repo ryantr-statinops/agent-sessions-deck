@@ -147,3 +147,73 @@ func TestDispatcherHandlesWorkspaces(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
+
+type historyEventsTestClient struct {
+	app.Client
+	historyCalled bool
+	eventsCalled  bool
+}
+
+func (c *historyEventsTestClient) History(ctx context.Context, req app.HistoryRequest) (app.HistoryResult, error) {
+	c.historyCalled = true
+	return app.HistoryResult{
+		Authority:  session.AuthorityLive,
+		TotalCount: 1,
+		Sessions: []app.SessionHistory{
+			{ID: "s-1", Name: "kestrel"},
+		},
+	}, nil
+}
+
+func (c *historyEventsTestClient) Events(ctx context.Context, req app.EventsRequest) (app.EventsResult, error) {
+	c.eventsCalled = true
+	return app.EventsResult{
+		Authority:    session.AuthorityLive,
+		NextRevision: 10,
+	}, nil
+}
+
+func TestDispatcherHandlesHistoryAndEvents(t *testing.T) {
+	client := &historyEventsTestClient{}
+	dispatcher, err := NewDispatcher(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. History
+	histPayload, _ := json.Marshal(app.HistoryRequest{Limit: 10})
+	histReq := Frame{
+		Version:   ProtocolVersion,
+		Type:      FrameRequest,
+		RequestID: "hist-1",
+		Operation: OpHistory,
+		Payload:   histPayload,
+	}
+	histResp := dispatcher.Handle(context.Background(), histReq)
+	if histResp.Error != nil {
+		t.Fatalf("history error: %+v", histResp.Error)
+	}
+	if !client.historyCalled {
+		t.Fatalf("expected client.History to be called")
+	}
+
+	// 2. Events
+	evtPayload, _ := json.Marshal(app.EventsRequest{Limit: 5})
+	evtReq := Frame{
+		Version:   ProtocolVersion,
+		Type:      FrameRequest,
+		RequestID: "evt-1",
+		Operation: OpEvents,
+		Payload:   evtPayload,
+	}
+	evtResp := dispatcher.Handle(context.Background(), evtReq)
+	if evtResp.Error != nil {
+		t.Fatalf("events error: %+v", evtResp.Error)
+	}
+	if !client.eventsCalled {
+		t.Fatalf("expected client.Events to be called")
+	}
+	if evtResp.Revision != 10 {
+		t.Fatalf("evtResp.Revision = %d, want 10", evtResp.Revision)
+	}
+}
