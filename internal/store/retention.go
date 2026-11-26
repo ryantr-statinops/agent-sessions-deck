@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
 // PruneEvents retains at most maxEvents and drops events older than maxAge relative to now.
@@ -146,4 +147,118 @@ func (j *EventJournal) pruneLocked(ctx context.Context, maxEvents int, maxAge ti
 	}
 
 	return prunedCount, nil
+}
+
+// PruneAttempts caps the historical attempts of sessions to maxAttemptsPerSession.
+// Active sessions and running/current attempts are strictly protected and never pruned.
+func PruneAttempts(sessions []session.Session, maxAttemptsPerSession int) (int, []session.Session) {
+	if maxAttemptsPerSession <= 0 {
+		return 0, sessions
+	}
+
+	totalPruned := 0
+	result := make([]session.Session, len(sessions))
+	for i, s := range sessions {
+		if len(s.Attempts) <= maxAttemptsPerSession {
+			result[i] = s
+			continue
+		}
+
+		toPrune := len(s.Attempts) - maxAttemptsPerSession
+
+		// Active record protection: ensure current attempt is preserved
+		if current, ok := s.Current(); ok {
+			currIdx := -1
+			for idx, a := range s.Attempts {
+				if a.Generation == current.Generation {
+					currIdx = idx
+					break
+				}
+			}
+			if currIdx >= 0 && currIdx < toPrune {
+				toPrune = currIdx
+			}
+		}
+
+		if toPrune <= 0 {
+			result[i] = s
+			continue
+		}
+
+		totalPruned += toPrune
+		sCopy := s
+		sCopy.Attempts = make([]session.Attempt, len(s.Attempts)-toPrune)
+		copy(sCopy.Attempts, s.Attempts[toPrune:])
+		result[i] = sCopy
+	}
+
+	return totalPruned, result
+}
+
+// PruneFinishedSessions drops terminal sessions that ended before now - maxAge.
+// Active sessions (created, starting, running, stopping, unknown) are strictly protected.
+func PruneFinishedSessions(sessions []session.Session, maxAge time.Duration, now time.Time) (int, []session.Session) {
+	if maxAge <= 0 {
+		return 0, sessions
+	}
+
+	cutoff := now.Add(-maxAge)
+	var surviving []session.Session
+	prunedCount := 0
+
+	for _, s := range sessions {
+		// Strictly protect active sessions
+		if s.Lifecycle().Active() {
+			surviving = append(surviving, s)
+			continue
+		}
+
+		// For terminal sessions, check if older than cutoff
+		if s.UpdatedAt.Before(cutoff) {
+			prunedCount++
+			continue
+		}
+
+		surviving = append(surviving, s)
+	}
+
+	return prunedCount, surviving
+}
+
+// PruneRetention applies attempt and finished session retention rules to the session store.
+func (s *SessionsStore) PruneRetention(ctx context.Context, maxAttempts int, maxFinishedAge time.Duration, now time.Time) (int, int, error) {
+	var prunedAttempts, prunedSessions int
+	err := s.withLock(func() error {
+		sessions, rev, err := s.loadUnlocked(ctx)
+		if err != nil {
+			return err
+		}
+
+		var sessModified bool
+		if maxAttempts > 0 {
+			pAtt, pruned := PruneAttempts(sessions, maxAttempts)
+			if pAtt > 0 {
+				sessions = pruned
+				prunedAttempts = pAtt
+				sessModified = true
+			}
+		}
+
+		if maxFinishedAge > 0 {
+			pSess, remaining := PruneFinishedSessions(sessions, maxFinishedAge, now)
+			if pSess > 0 {
+				sessions = remaining
+				prunedSessions = pSess
+				sessModified = true
+			}
+		}
+
+		if !sessModified {
+			return nil
+		}
+
+		_, err = s.writeRevision(sessions, rev+1)
+		return err
+	})
+	return prunedAttempts, prunedSessions, err
 }

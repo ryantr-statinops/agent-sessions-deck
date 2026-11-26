@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
 func TestEventJournalPrune(t *testing.T) {
@@ -89,5 +90,102 @@ func TestEventJournalPrune(t *testing.T) {
 	}
 	if surviving[0].Revision() != 7 || surviving[3].Revision() != 10 {
 		t.Fatalf("revisions = %d..%d, want 7..10", surviving[0].Revision(), surviving[3].Revision())
+	}
+}
+
+func TestPruneAttemptsAndActiveProtection(t *testing.T) {
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+
+	// Create a session with 5 attempts
+	s1, err := session.New("s-000001", "worker-1", "echo-agent", "/workspaces/default", now)
+	if err != nil {
+		t.Fatalf("New session: %v", err)
+	}
+
+	for gen := 1; gen <= 5; gen++ {
+		att := session.NewAttempt(session.Generation(gen), now)
+		att.Lifecycle = session.LifecycleExited
+		att.EndedAt = now
+		s1.Attempts = append(s1.Attempts, att)
+		s1.Generation = session.Generation(gen)
+	}
+
+	// 1. Prune with maxAttempts = 2 -> drops attempts 1, 2, 3; keeps 4, 5
+	pruned, result := PruneAttempts([]session.Session{s1}, 2)
+	if pruned != 3 {
+		t.Fatalf("pruned = %d, want 3", pruned)
+	}
+	if len(result[0].Attempts) != 2 {
+		t.Fatalf("len(attempts) = %d, want 2", len(result[0].Attempts))
+	}
+	if result[0].Attempts[0].Generation != 4 || result[0].Attempts[1].Generation != 5 {
+		t.Fatalf("generations = %v, %v, want 4, 5", result[0].Attempts[0].Generation, result[0].Attempts[1].Generation)
+	}
+
+	// 2. Active Session Protection: Session has running current attempt
+	sActive, err := session.New("s-000002", "worker-active", "echo-agent", "/workspaces/default", now)
+	if err != nil {
+		t.Fatalf("New session: %v", err)
+	}
+	for gen := 1; gen <= 4; gen++ {
+		att := session.NewAttempt(session.Generation(gen), now)
+		att.Lifecycle = session.LifecycleExited
+		att.EndedAt = now
+		sActive.Attempts = append(sActive.Attempts, att)
+	}
+	// Attempt 5 is RUNNING
+	runningAtt := session.NewAttempt(session.Generation(5), now)
+	runningAtt.Lifecycle = session.LifecycleRunning
+	runningAtt.RunningAt = now
+	sActive.Attempts = append(sActive.Attempts, runningAtt)
+	sActive.Generation = 5
+
+	pruned, resultActive := PruneAttempts([]session.Session{sActive}, 3)
+	if pruned != 2 {
+		t.Fatalf("pruned = %d, want 2", pruned)
+	}
+	if len(resultActive[0].Attempts) != 3 {
+		t.Fatalf("len = %d, want 3", len(resultActive[0].Attempts))
+	}
+	curr, ok := resultActive[0].Current()
+	if !ok || curr.Generation != 5 || curr.Lifecycle != session.LifecycleRunning {
+		t.Fatalf("current attempt corrupted: ok=%v, curr=%+v", ok, curr)
+	}
+}
+
+func TestPruneFinishedSessionsActiveProtection(t *testing.T) {
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+
+	// Old finished session
+	sFinished, err := session.New("s-000001", "old-finished", "echo-agent", "/workspaces/default", now.Add(-100*24*time.Hour))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	sFinished.UpdatedAt = now.Add(-100 * 24 * time.Hour)
+	att1 := session.NewAttempt(1, now.Add(-100*24*time.Hour))
+	att1.Lifecycle = session.LifecycleExited
+	att1.EndedAt = now.Add(-100 * 24 * time.Hour)
+	sFinished.Attempts = append(sFinished.Attempts, att1)
+	sFinished.Generation = 1
+
+	// Old active session (running for 100 days)
+	sActive, err := session.New("s-000002", "old-running", "echo-agent", "/workspaces/default", now.Add(-100*24*time.Hour))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	sActive.UpdatedAt = now.Add(-100 * 24 * time.Hour)
+	att2 := session.NewAttempt(1, now.Add(-100*24*time.Hour))
+	att2.Lifecycle = session.LifecycleRunning
+	att2.RunningAt = now.Add(-100 * 24 * time.Hour)
+	sActive.Attempts = append(sActive.Attempts, att2)
+	sActive.Generation = 1
+
+	sessions := []session.Session{sFinished, sActive}
+	pruned, surviving := PruneFinishedSessions(sessions, 30*24*time.Hour, now)
+	if pruned != 1 {
+		t.Fatalf("pruned = %d, want 1", pruned)
+	}
+	if len(surviving) != 1 || surviving[0].ID != "s-000002" {
+		t.Fatalf("surviving = %+v, want only active session s-000002", surviving)
 	}
 }
