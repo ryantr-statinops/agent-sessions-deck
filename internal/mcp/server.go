@@ -17,6 +17,7 @@ type Server struct {
 	initialized bool
 	tools       map[string]registeredTool
 	toolOrder   []string
+	policy      *PolicyEngine
 }
 
 type registeredTool struct {
@@ -31,6 +32,7 @@ type ToolHandler func(ctx context.Context, args json.RawMessage) (CallToolResult
 type ServerOptions struct {
 	Name    string
 	Version string
+	Policy  *PolicyEngine
 }
 
 // NewServer initializes an MCP server.
@@ -46,6 +48,7 @@ func NewServer(opts ServerOptions) *Server {
 		version:   opts.Version,
 		tools:     make(map[string]registeredTool),
 		toolOrder: make([]string, 0),
+		policy:    opts.Policy,
 	}
 }
 
@@ -120,6 +123,9 @@ func (s *Server) HandleMessage(ctx context.Context, msg Message) (Message, bool,
 		tools := make([]Tool, 0, len(s.toolOrder))
 		for _, name := range s.toolOrder {
 			reg := s.tools[name]
+			if s.policy != nil && !s.policy.IsToolAllowed(name) {
+				continue
+			}
 			tools = append(tools, reg.tool)
 		}
 		s.mu.RUnlock()
@@ -145,6 +151,22 @@ func (s *Server) HandleMessage(ctx context.Context, msg Message) (Message, bool,
 
 		if !exists {
 			return NewErrorResponse(msg.ID, CodeMethodNotFound, fmt.Sprintf("tool %q not found", params.Name), nil), true, nil
+		}
+
+		// Policy enforcement check
+		if s.policy != nil {
+			if err := s.policy.CheckToolExecution(params.Name, reg.tool.Annotations); err != nil {
+				var code int
+				switch {
+				case errors.Is(err, ErrApprovalRequired):
+					code = CodeApprovalRequired
+				case errors.Is(err, ErrForbidden):
+					code = CodeForbidden
+				default:
+					code = CodeForbidden
+				}
+				return NewErrorResponse(msg.ID, code, err.Error(), nil), true, nil
+			}
 		}
 
 		// Execute tool handler
