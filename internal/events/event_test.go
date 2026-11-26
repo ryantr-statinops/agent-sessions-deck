@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -170,5 +171,36 @@ func TestEventRenderingOmitsMetadataPayloads(t *testing.T) {
 	notification := Notification{event: event}
 	if strings.Contains(notification.String(), "super-secret-reviewer") {
 		t.Fatalf("Notification.String() = %q, want no metadata payload", notification.String())
+	}
+}
+
+func TestEventJSONRoundTrip(t *testing.T) {
+	meta, err := Metadata{}.WithString("role", "reviewer")
+	if err != nil {
+		t.Fatalf("WithString: %v", err)
+	}
+	meta, err = meta.WithInt("code", 100)
+	if err != nil {
+		t.Fatalf("WithInt: %v", err)
+	}
+	ev := NewEvent("evt-001", TypeSessionStarted, "s-123", 2, 42, NewTimestamp(time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)), meta)
+	data, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded Event
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.ID() != ev.ID() || decoded.Type() != ev.Type() || decoded.SessionID() != ev.SessionID() || decoded.Revision() != ev.Revision() {
+		t.Fatalf("decoded = %+v, want %+v", decoded, ev)
+	}
+	gen, ok := decoded.AttemptGeneration()
+	if !ok || gen != 2 {
+		t.Fatalf("AttemptGeneration = %v, %v", gen, ok)
+	}
+	val, ok := decoded.Metadata().Lookup("role")
+	if str, _ := val.AsString(); !ok || str != "reviewer" {
+		t.Fatalf("metadata role = %v, %v", str, ok)
 	}
 }
