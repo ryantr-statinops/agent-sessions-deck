@@ -138,6 +138,14 @@ func (o *Owner) SessionsStore(path string) *store.SessionsStore {
 	return store.NewOwnerSessionsStore(path, o.lock)
 }
 
+// EventJournal returns an event journal bound to this owner's lifetime lock.
+func (o *Owner) EventJournal(path string) (*store.EventJournal, error) {
+	if o == nil {
+		return nil, errors.New("owner is nil")
+	}
+	return store.NewOwnerEventJournal(path, o.lock)
+}
+
 // Close stops accepting new connections before releasing the owner lock.
 func (o *Owner) Close() error {
 	if o == nil {

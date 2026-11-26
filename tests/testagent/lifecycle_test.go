@@ -278,6 +278,9 @@ func TestExitBySignal(t *testing.T) {
 	if err := f.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("signal fixture: %v", err)
 	}
+	if _, err := f.waitFor(exitTimeout); err != nil {
+		t.Fatalf("wait fixture after signal: %v", err)
+	}
 	info := f.shutdown()
 	if !info.exited {
 		t.Fatal("fixture did not exit after SIGTERM")

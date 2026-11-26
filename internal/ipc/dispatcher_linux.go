@@ -243,6 +243,18 @@ func (d *Dispatcher) execute(ctx context.Context, request Frame) Frame {
 		if err == nil {
 			result, err = d.client.Delete(ctx, req)
 		}
+	case OpHistory:
+		var req app.HistoryRequest
+		err = decodePayload(request.Payload, &req)
+		if err == nil {
+			result, err = d.client.History(ctx, req)
+		}
+	case OpEvents:
+		var req app.EventsRequest
+		err = decodePayload(request.Payload, &req)
+		if err == nil {
+			result, err = d.client.Events(ctx, req)
+		}
 	default:
 		err = session.NewError(session.CodeUnsupported, request.Operation, "IPC operation is not supported", "use a documented Stage 06 operation")
 	}
@@ -282,6 +294,8 @@ func resultRevision(result any) uint64 {
 		return value.Revision
 	case app.DeleteResult:
 		return value.Revision
+	case app.EventsResult:
+		return value.NextRevision
 	default:
 		return 0
 	}

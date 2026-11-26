@@ -57,12 +57,14 @@ const (
 	OpStop       = "stop"
 	OpKill       = "kill"
 	OpDelete     = "delete"
+	OpHistory    = "history"
+	OpEvents     = "events"
 )
 
 // ValidOperation reports whether an operation is supported.
 func ValidOperation(op string) bool {
 	switch op {
-	case OpScan, OpList, OpInspect, OpWorkspaces, OpCreate, OpOpen, OpDetach, OpRename, OpRestart, OpStop, OpKill, OpDelete:
+	case OpScan, OpList, OpInspect, OpWorkspaces, OpCreate, OpOpen, OpDetach, OpRename, OpRestart, OpStop, OpKill, OpDelete, OpHistory, OpEvents:
 		return true
 	default:
 		return false

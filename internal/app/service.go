@@ -110,6 +110,11 @@ func WithGitCache(c *GitThrottleCache) Option {
 	return func(s *Service) { s.gitCache = c }
 }
 
+// WithEventJournal attaches a persistent event journal to the service.
+func WithEventJournal(journal EventJournalStore) Option {
+	return func(s *Service) { s.journal = journal }
+}
+
 // Service is the application layer: one owner of sessions, workspaces, children
 // and interactive leases.
 //
@@ -142,6 +147,7 @@ type Service struct {
 	leases     LeaseBroker
 	terminals  TerminalSource
 	events     MetadataPublisher
+	journal    EventJournalStore
 	clock      Clock
 	ids        IDMinter
 
@@ -654,6 +660,9 @@ func (s *Service) publish(revision uint64, typ events.Type, row session.SessionS
 	event, err := s.events.PublishRevisioned(events.Revision(revision), spec)
 	if err != nil {
 		return events.Event{}, s.publicationError(row, revision, err)
+	}
+	if s.journal != nil {
+		_ = s.journal.Append(context.Background(), event)
 	}
 	return event, nil
 }

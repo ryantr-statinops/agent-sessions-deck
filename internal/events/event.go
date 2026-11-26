@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -105,6 +106,14 @@ func (s Spec) validate() error {
 	return nil
 }
 
+// JournalFilter specifies filtering and pagination parameters for persistent event queries.
+type JournalFilter struct {
+	SessionID     SessionID `json:"session_id,omitempty"`
+	Type          Type      `json:"type,omitempty"`
+	AfterRevision uint64    `json:"after_revision,omitempty"`
+	Limit         int       `json:"limit,omitempty"`
+}
+
 // Event is one published metadata event: an immutable value that a publisher
 // created and subscribers only read.
 type Event struct {
@@ -129,6 +138,11 @@ func newEvent(id ID, typ Type, session SessionID, attempt AttemptGeneration, rev
 		at:      at,
 		meta:    meta,
 	}
+}
+
+// NewEvent constructs an Event directly. Intended for store and deserialization.
+func NewEvent(id ID, typ Type, session SessionID, attempt AttemptGeneration, rev Revision, at Timestamp, meta Metadata) Event {
+	return newEvent(id, typ, session, attempt, rev, at, meta)
 }
 
 // ID returns the event ID.
@@ -156,6 +170,96 @@ func (e Event) Revision() Revision { return e.rev }
 
 // Timestamp returns the event instant in UTC.
 func (e Event) Timestamp() Timestamp { return e.at }
+
+type eventJSON struct {
+	ID        ID                `json:"id"`
+	Type      Type              `json:"type"`
+	Session   SessionID         `json:"session,omitempty"`
+	Attempt   AttemptGeneration `json:"attempt,omitempty"`
+	Revision  Revision          `json:"revision"`
+	Timestamp string            `json:"timestamp"`
+	Metadata  map[string]any    `json:"metadata,omitempty"`
+}
+
+// MarshalJSON serializes an Event into JSON.
+func (e Event) MarshalJSON() ([]byte, error) {
+	var metaMap map[string]any
+	if !e.meta.IsEmpty() {
+		metaMap = make(map[string]any, len(e.meta.fields))
+		for k, v := range e.meta.fields {
+			switch v.kind {
+			case KindString:
+				metaMap[k] = v.str
+			case KindInt64:
+				metaMap[k] = v.i
+			case KindUint64:
+				metaMap[k] = v.u
+			case KindFloat64:
+				metaMap[k] = v.f
+			case KindBool:
+				metaMap[k] = v.b
+			case KindTimestamp:
+				metaMap[k] = v.ts.String()
+			case KindStrings:
+				metaMap[k] = v.list
+			}
+		}
+	}
+	return json.Marshal(eventJSON{
+		ID:        e.id,
+		Type:      e.typ,
+		Session:   e.session,
+		Attempt:   e.attempt,
+		Revision:  e.rev,
+		Timestamp: e.at.String(),
+		Metadata:  metaMap,
+	})
+}
+
+// UnmarshalJSON parses an Event from JSON.
+func (e *Event) UnmarshalJSON(data []byte) error {
+	var raw eventJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	var at Timestamp
+	if raw.Timestamp != "" {
+		t, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, raw.Timestamp)
+		}
+		if err == nil {
+			at = NewTimestamp(t)
+		}
+	}
+	var meta Metadata
+	for k, val := range raw.Metadata {
+		switch v := val.(type) {
+		case string:
+			meta, _ = meta.WithString(k, v)
+		case bool:
+			meta, _ = meta.WithBool(k, v)
+		case float64:
+			if v == float64(int64(v)) {
+				meta, _ = meta.WithInt(k, int64(v))
+			} else {
+				meta, _ = meta.WithFloat(k, v)
+			}
+		case []any:
+			strs := make([]string, 0, len(v))
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					strs = append(strs, s)
+				}
+			}
+			meta, _ = meta.WithStrings(k, strs)
+		case []string:
+			meta, _ = meta.WithStrings(k, v)
+		}
+	}
+	*e = newEvent(raw.ID, raw.Type, raw.Session, raw.Attempt, raw.Revision, at, meta)
+	return nil
+}
 
 // Metadata returns the typed metadata of the event. Metadata values are
 // immutable, so the returned copy is safe to read for the event's lifetime.

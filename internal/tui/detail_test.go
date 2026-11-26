@@ -48,6 +48,8 @@ func TestRenderDetailPane(t *testing.T) {
 		"attached",
 		"9988",
 		"stopped",
+		"2 previous execution(s) recorded",
+		"Active live PTY available",
 	}
 
 	for _, exp := range expectedStrings {

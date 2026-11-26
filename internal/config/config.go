@@ -29,6 +29,8 @@ type Config struct {
 	Workspaces []Workspace `yaml:"workspaces"`
 	// Terminal bounds the interactive terminal resources.
 	Terminal Terminal `yaml:"terminal"`
+	// Retention configures session attempt and event journal retention limits.
+	Retention Retention `yaml:"retention"`
 }
 
 // General holds the dashboard-wide runtime knobs.
@@ -71,6 +73,18 @@ type Terminal struct {
 	MaxInputQueue int `yaml:"max_input_queue"`
 }
 
+// Retention configures history and event persistence bounds.
+type Retention struct {
+	// MaxAttemptsPerSession caps retained terminal attempts per session.
+	MaxAttemptsPerSession int `yaml:"max_attempts_per_session"`
+	// MaxEvents caps retained journal events.
+	MaxEvents int `yaml:"max_events"`
+	// MaxEventAge is the TTL duration for journal events, e.g. "720h".
+	MaxEventAge string `yaml:"max_event_age"`
+	// MaxFinishedSessionAge is the TTL duration for finished sessions, e.g. "2160h".
+	MaxFinishedSessionAge string `yaml:"max_finished_session_age"`
+}
+
 // Default returns the small documented defaults used when config.yaml is
 // absent. Nothing in the default writes secrets or points at a real state
 // directory: it is inert until a store opens under it.
@@ -81,7 +95,43 @@ func Default() Config {
 		Agents:     []Agent{},
 		Workspaces: []Workspace{},
 		Terminal:   Terminal{Scrollback: 10000, MaxInputQueue: 65536},
+		Retention: Retention{
+			MaxAttemptsPerSession: 50,
+			MaxEvents:             10000,
+			MaxEventAge:           "720h",
+			MaxFinishedSessionAge: "2160h",
+		},
 	}
+}
+
+// EventAgeDuration parses the max event retention age duration.
+func (r Retention) EventAgeDuration() (time.Duration, error) {
+	if r.MaxEventAge == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(r.MaxEventAge)
+	if err != nil {
+		return 0, fmt.Errorf("retention.max_event_age %q is not a valid duration (example: \"720h\"): %w", r.MaxEventAge, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("retention.max_event_age must be positive, got %q", r.MaxEventAge)
+	}
+	return d, nil
+}
+
+// FinishedSessionAgeDuration parses the max finished session age duration.
+func (r Retention) FinishedSessionAgeDuration() (time.Duration, error) {
+	if r.MaxFinishedSessionAge == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(r.MaxFinishedSessionAge)
+	if err != nil {
+		return 0, fmt.Errorf("retention.max_finished_session_age %q is not a valid duration (example: \"2160h\"): %w", r.MaxFinishedSessionAge, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("retention.max_finished_session_age must be positive, got %q", r.MaxFinishedSessionAge)
+	}
+	return d, nil
 }
 
 // RefreshDuration parses the refresh setting.
@@ -111,6 +161,18 @@ func (c Config) Validate() error {
 	}
 	if c.Terminal.MaxInputQueue <= 0 {
 		return fmt.Errorf("terminal.max_input_queue must be positive, got %d", c.Terminal.MaxInputQueue)
+	}
+	if c.Retention.MaxAttemptsPerSession <= 0 {
+		return fmt.Errorf("retention.max_attempts_per_session must be positive, got %d", c.Retention.MaxAttemptsPerSession)
+	}
+	if c.Retention.MaxEvents <= 0 {
+		return fmt.Errorf("retention.max_events must be positive, got %d", c.Retention.MaxEvents)
+	}
+	if _, err := c.Retention.EventAgeDuration(); err != nil {
+		return err
+	}
+	if _, err := c.Retention.FinishedSessionAgeDuration(); err != nil {
+		return err
 	}
 	seen := map[string]int{}
 	for i, a := range c.Agents {

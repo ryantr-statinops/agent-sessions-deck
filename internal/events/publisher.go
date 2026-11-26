@@ -56,6 +56,12 @@ func WithIDMint(mint func(Revision) ID) Option {
 	return func(p *Publisher) { p.mintID = mint }
 }
 
+// WithInitialRevision seeds the initial revision counter, so the publisher
+// resumes numbering monotonically from a persistent journal.
+func WithInitialRevision(rev Revision) Option {
+	return func(p *Publisher) { p.revision = rev }
+}
+
 // NewPublisher returns a publisher that starts at revision zero, so the first
 // published event carries revision 1.
 func NewPublisher(opts ...Option) *Publisher {

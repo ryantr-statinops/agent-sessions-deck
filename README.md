@@ -12,20 +12,20 @@ ASD chạy các công cụ coding agent thực tế, như Claude Code, Codex CLI
 
 ## Trạng thái hiện tại
 
-Dự án đã hoàn tất các Stage từ 00 đến 12 (toàn bộ các mốc **M0, M1, và M2 / V1 Release** đã hoàn thành 100%, Milestone **M3 — V2 Control Plane** đã hoàn thành 2/4 stage gồm Stage 11 và Stage 12). Stage 13 (V2 history and event persistence) là bước kế tiếp thuộc Milestone M3.
+Dự án đã hoàn tất các Stage từ 00 đến 13 (toàn bộ các mốc **M0, M1, và M2 / V1 Release** đã hoàn thành 100%, Milestone **M3 — V2 Control Plane** đã hoàn thành 3/4 stage gồm Stage 11, Stage 12 và Stage 13). Stage 14 (Multi-client interactive collaboration) là bước kế tiếp thuộc Milestone M3.
 
 | Hạng mục | Trạng thái |
 |---|---|
 | Đặc tả sản phẩm | Đã hoàn thiện trong [PRODUCT.md](PRODUCT.md) |
 | Kế hoạch triển khai | Đã có 16 stage trong [docs/plan/implementation/](docs/plan/implementation/README.md) |
-| Stage thực thi đã hoàn thành | 13/16; Stage 00–12 `DONE`, Stage 13–15 `PLANNED` |
-| Mốc đã hoàn tất | **M0, M1, M2 (V1 Release)** đã nghiệm thu đầy đủ; **M3 (V2 Control Plane)** đạt 50% |
+| Stage thực thi đã hoàn thành | 14/16; Stage 00–13 `DONE`, Stage 14–15 `PLANNED` |
+| Mốc đã hoàn tất | **M0, M1, M2 (V1 Release)** đã nghiệm thu đầy đủ; **M3 (V2 Control Plane)** đạt 75% |
 | Binary cung cấp | `asd` (CLI & TUI client) và `agentd` (background supervisor & PTY daemon) |
-| Stage tiếp theo | [Stage 13 — V2 history and event persistence](docs/plan/implementation/13-v2-history-and-event-persistence.md) (`PLANNED`) |
-| Mã nguồn, Go module, build và tests | Toàn bộ V1 runtime, V2 daemon, workspace grouping, process tree metrics đạt 100% test pass |
+| Stage tiếp theo | [Stage 14 — V2 multi-client interactive collaboration](docs/plan/implementation/14-v2-multi-client-interactive-collaboration.md) (`PLANNED`) |
+| Mã nguồn, Go module, build và tests | Toàn bộ V1 runtime, V2 daemon, workspace grouping, process tree metrics, event journal đạt 100% test pass |
 | Bản phát hành và tài liệu cài đặt | Đầy đủ bản đóng gói phát hành Linux amd64/arm64 và hướng dẫn tại [docs/installation.md](docs/installation.md) |
 
-Repo đã có đầy đủ mã nguồn Go, toàn bộ CLI (`scan`, `list`, `inspect`, `new`, `open`, `rename`, `restart`, `stop`, `kill`, `workspace list`), daemon supervisor `agentd` (`run`, `start`, `stop`, `status`), TUI đa năng (Dashboard, Inspector, Launcher, Virtual Terminal đa phiên), bộ kiểm thử phục hồi lỗi và ma trận nghiệm thu V1/V2. License MIT.
+Repo đã có đầy đủ mã nguồn Go, toàn bộ CLI (`scan`, `list`, `inspect`, `new`, `open`, `rename`, `restart`, `stop`, `kill`, `workspace list`, `history`, `events`), daemon supervisor `agentd` (`run`, `start`, `stop`, `status`), TUI đa năng (Dashboard, Inspector, Launcher, Virtual Terminal đa phiên), bộ kiểm thử phục hồi lỗi và ma trận nghiệm thu V1/V2. License MIT.
 
 
 ## Mục tiêu sản phẩm
@@ -75,16 +75,20 @@ Mỗi stage có checklist, dependency, đầu ra, tiêu chí hoàn thành, kiể
 
 ## Bước triển khai tiếp theo
 
-Các Stage 11 và 12 đã hoàn tất:
+Các Stage 11, 12 và 13 đã hoàn tất:
 - [Stage 11 — V2 daemon và client migration](docs/plan/implementation/11-v2-daemon-and-client-migration.md) (`DONE`): Tách biệt vòng đời session khỏi TUI qua daemon `agentd`.
 - [Stage 12 — V2 workspaces và observability](docs/plan/implementation/12-v2-workspaces-and-observability.md) (`DONE`): Gom nhóm workspace, thống kê tài nguyên (CPU ticks, RSS bytes) theo cây tiến trình.
+- [Stage 13 — V2 history và event persistence](docs/plan/implementation/13-v2-history-and-event-persistence.md) (`DONE`): Lưu trữ lịch sử session attempts và nhật ký sự kiện `events.jsonl` tăng đơn điệu.
 
 Bước tiếp theo thuộc Milestone M3:
-- [Stage 13 — V2 history và event persistence](docs/plan/implementation/13-v2-history-and-event-persistence.md) (`PLANNED`): Lưu trữ lịch sử session và sự kiện theo thời gian dài.
+- [Stage 14 — V2 multi-client interactive collaboration](docs/plan/implementation/14-v2-multi-client-interactive-collaboration.md) (`PLANNED`): Tương tác đa client đồng thời trên cùng session.
 
 ## Tài liệu
 
 - [PRODUCT.md](PRODUCT.md): ý tưởng, phạm vi sản phẩm và đặc tả kỹ thuật.
+- [Hướng dẫn Lịch sử & Event Persistence](docs/history.md): truy vấn lịch sử attempts, journal sự kiện và cấu hình retention.
+- [Ma trận nghiệm thu V2](docs/testing/v2-acceptance.md): bằng chứng kiểm thử V2, benchmarks và kiểm tra hồi quy.
+- [ADR 0005: History and Event Persistence Architecture](docs/architecture/adr/0005-history-and-event-persistence.md): quyết định kiến trúc lưu trữ JSONL vs SQLite.
 - [Hướng dẫn vận hành Daemon `agentd`](docs/daemon.md): kiến trúc, lifecycle, systemd unit và socket protocol của daemon.
 - [Hướng dẫn di chuyển sang V2](docs/migration-v2.md): các thay đổi tương thích ngược và nâng cấp từ V1.
 - [Hướng dẫn cài đặt và gỡ bỏ](docs/installation.md): cài đặt binary `asd` và `agentd`, biến môi trường, sao lưu và gỡ bỏ.

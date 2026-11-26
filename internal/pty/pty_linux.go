@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"unsafe"
 
 	unixpty "github.com/creack/pty"
 )
@@ -99,7 +100,21 @@ func (c *Child) Resize(size Size) error {
 	if err != nil {
 		return err
 	}
-	return unixpty.Setsize(c.master, winsize)
+	raw, err := c.master.SyscallConn()
+	if err != nil {
+		return unixpty.Setsize(c.master, winsize)
+	}
+	var ioctlErr error
+	ctrlErr := raw.Control(func(fd uintptr) {
+		_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, syscall.TIOCSWINSZ, uintptr(unsafe.Pointer(winsize)))
+		if errno != 0 {
+			ioctlErr = errno
+		}
+	})
+	if ctrlErr != nil {
+		return ctrlErr
+	}
+	return ioctlErr
 }
 
 // Wait reaps the child once. A second caller is refused rather than racing or

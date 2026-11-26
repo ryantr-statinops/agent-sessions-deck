@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestPublisherWithInitialRevision(t *testing.T) {
+	p := NewPublisher(WithInitialRevision(42))
+	if got := p.Revision(); got != 42 {
+		t.Fatalf("Revision() = %d, want 42", got)
+	}
+	ev, err := p.Publish(Spec{Type: TypeSessionStarted, Session: "s1"})
+	if err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if ev.Revision() != 43 {
+		t.Fatalf("ev.Revision() = %d, want 43", ev.Revision())
+	}
+}
+
 func TestPublishAssignsMonotonicRevisions(t *testing.T) {
 	publisher := newTestPublisher(t)
 	if got := publisher.Revision(); got != 0 {

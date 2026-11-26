@@ -16,6 +16,9 @@ func TestLoadAbsentConfigUsesDefaults(t *testing.T) {
 	if cfg.General.RefreshInterval != "2s" || cfg.Terminal.Scrollback != 10000 || cfg.Terminal.MaxInputQueue != 65536 {
 		t.Fatalf("defaults = %+v", cfg)
 	}
+	if cfg.Retention.MaxAttemptsPerSession != 50 || cfg.Retention.MaxEvents != 10000 || cfg.Retention.MaxEventAge != "720h" || cfg.Retention.MaxFinishedSessionAge != "2160h" {
+		t.Fatalf("retention defaults = %+v", cfg.Retention)
+	}
 	if len(cfg.Agents) != 0 || len(cfg.Workspaces) != 0 {
 		t.Fatalf("defaults should declare nothing: %+v", cfg)
 	}
@@ -39,12 +42,26 @@ workspaces:
 terminal:
   scrollback: 5000
   max_input_queue: 4096
+retention:
+  max_attempts_per_session: 20
+  max_events: 5000
+  max_event_age: 168h
+  max_finished_session_age: 720h
 `))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 	if cfg.General.RefreshInterval != "3s" || cfg.Terminal.Scrollback != 5000 {
 		t.Fatalf("cfg = %+v", cfg)
+	}
+	if cfg.Retention.MaxAttemptsPerSession != 20 || cfg.Retention.MaxEvents != 5000 {
+		t.Fatalf("retention = %+v", cfg.Retention)
+	}
+	if eventAge, err := cfg.Retention.EventAgeDuration(); err != nil || eventAge != 168*time.Hour {
+		t.Fatalf("EventAgeDuration = %v, %v", eventAge, err)
+	}
+	if sessAge, err := cfg.Retention.FinishedSessionAgeDuration(); err != nil || sessAge != 720*time.Hour {
+		t.Fatalf("FinishedSessionAgeDuration = %v, %v", sessAge, err)
 	}
 	if len(cfg.Agents) != 1 || cfg.Agents[0].ID != "opencode" || cfg.Agents[0].Args[1] != "--model" {
 		t.Fatalf("agents = %+v", cfg.Agents)
@@ -83,6 +100,43 @@ agents:
 `
 	if _, err := Parse([]byte(nested)); err == nil || !strings.Contains(err.Error(), "duplicate key") {
 		t.Fatalf("nested err = %v", err)
+	}
+}
+
+func TestParseRejectsInvalidRetention(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{
+			name: "invalid max_attempts_per_session",
+			yaml: "retention:\n  max_attempts_per_session: 0\n",
+			want: "retention.max_attempts_per_session",
+		},
+		{
+			name: "negative max_events",
+			yaml: "retention:\n  max_events: -5\n",
+			want: "retention.max_events",
+		},
+		{
+			name: "malformed max_event_age",
+			yaml: "retention:\n  max_event_age: invalid\n",
+			want: "retention.max_event_age",
+		},
+		{
+			name: "negative max_finished_session_age",
+			yaml: "retention:\n  max_finished_session_age: -10h\n",
+			want: "retention.max_finished_session_age",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse([]byte(tc.yaml))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q, got %v", tc.want, err)
+			}
+		})
 	}
 }
 
