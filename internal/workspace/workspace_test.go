@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -225,5 +226,41 @@ func TestDisplayName(t *testing.T) {
 	}
 	if (Workspace{}).DisplayName() != "" {
 		t.Fatalf("the zero workspace has a display name")
+	}
+}
+
+func TestWorkspaceJSONMarshalUnmarshal(t *testing.T) {
+	ws, err := New("/home/tester/kestrel")
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	git := Git{
+		Root:   "/home/tester/kestrel",
+		Branch: "main",
+	}
+	ws, err = ws.WithGit(git)
+	if err != nil {
+		t.Fatalf("WithGit failed: %v", err)
+	}
+
+	data, err := json.Marshal(ws)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var roundtrip Workspace
+	if err := json.Unmarshal(data, &roundtrip); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if roundtrip.ID() != ws.ID() {
+		t.Errorf("roundtrip ID = %q, want %q", roundtrip.ID(), ws.ID())
+	}
+	if roundtrip.Path() != ws.Path() {
+		t.Errorf("roundtrip Path = %q, want %q", roundtrip.Path(), ws.Path())
+	}
+	g, ok := roundtrip.Git()
+	if !ok || g.Branch != "main" {
+		t.Errorf("roundtrip Git = %+v, ok = %v", g, ok)
 	}
 }
