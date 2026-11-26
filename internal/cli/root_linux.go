@@ -60,7 +60,7 @@ func NewRoot(opts Options) *cobra.Command {
 		fmt.Fprintf(opts.Stderr, "foreground owner %s is running; use Ctrl-C to stop\n", runtimeID(runtime))
 		return runtime.Serve(ctx)
 	}
-	root.AddCommand(scanCommand(opts), listCommand(opts), workspaceCommand(opts), historyCommand(opts), eventsCommand(opts), inspectCommand(opts), newCommand(opts), openCommand(opts), renameCommand(opts), restartCommand(opts), stopCommand(opts), killCommand(opts))
+	root.AddCommand(scanCommand(opts), listCommand(opts), workspaceCommand(opts), historyCommand(opts), eventsCommand(opts), inspectCommand(opts), newCommand(opts), openCommand(opts), renameCommand(opts), restartCommand(opts), stopCommand(opts), killCommand(opts), mcpCommand(opts))
 	return root
 }
 
