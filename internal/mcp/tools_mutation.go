@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
@@ -17,6 +18,7 @@ func RegisterMutationTools(s *Server, client ControlPlaneClient) {
 	registerStartSession(s, client)
 	registerStopSession(s, client)
 	registerRestartSession(s, client)
+	registerInteractSession(s, client)
 }
 
 func registerStartSession(s *Server, client ControlPlaneClient) {
@@ -349,4 +351,207 @@ func registerRestartSession(s *Server, client ControlPlaneClient) {
 		}
 		return toolRes, nil
 	})
+}
+
+func registerInteractSession(s *Server, client ControlPlaneClient) {
+	s.RegisterTool(Tool{
+		Name:        "interact_session",
+		Description: "Interact with an active session: read bounded screen snapshot or write input text with lease arbitration.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]PropertyDef{
+				"session_id": {
+					Type:        "string",
+					Description: "Full session ID or unambiguous prefix",
+				},
+				"action": {
+					Type:        "string",
+					Description: "Action to perform: 'read_screen' or 'write_input'",
+					Enum:        []string{"read_screen", "write_input"},
+				},
+				"input_text": {
+					Type:        "string",
+					Description: "Text or control sequence to write into the session (required for 'write_input')",
+				},
+				"expected_generation": {
+					Type:        "integer",
+					Description: "Optional attempt generation guard to avoid writing to restarted session",
+				},
+				"holder": {
+					Type:        "string",
+					Description: "Client holder identifier for lease claim (default 'mcp-client')",
+				},
+				"max_bytes": {
+					Type:        "integer",
+					Description: "Max screen content bytes to return (default from policy, e.g. 65536)",
+				},
+			},
+			Required: []string{"session_id", "action"},
+		},
+		Annotations: &ToolAnnotation{
+			ReadOnly:    false,
+			Destructive: true,
+		},
+	}, func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+		var input struct {
+			SessionID          string `json:"session_id"`
+			Action             string `json:"action"`
+			InputText          string `json:"input_text"`
+			ExpectedGeneration int    `json:"expected_generation"`
+			Holder             string `json:"holder"`
+			MaxBytes           int    `json:"max_bytes"`
+		}
+		if err := json.Unmarshal(args, &input); err != nil || input.SessionID == "" {
+			return NewErrorResult("interact_session requires 'session_id' and 'action'"), nil
+		}
+
+		if input.Holder == "" {
+			input.Holder = "mcp-client"
+		}
+		maxBytes := 65536
+		if s.Policy() != nil && s.Policy().MaxOutputBytes() > 0 {
+			maxBytes = s.Policy().MaxOutputBytes()
+		}
+		if input.MaxBytes > 0 && input.MaxBytes < maxBytes {
+			maxBytes = input.MaxBytes
+		}
+
+		switch input.Action {
+		case "read_screen":
+			// Read screen action is non-destructive
+			openRes, err := client.Open(ctx, app.OpenRequest{
+				Ref:    input.SessionID,
+				Holder: input.Holder,
+			})
+			if err != nil {
+				return NewErrorResult(fmt.Sprintf("failed to read screen for session %q: %v", input.SessionID, err)), nil
+			}
+			defer func() {
+				if openRes.Terminal != nil {
+					_ = openRes.Terminal.Close()
+				}
+			}()
+
+			var snapshot app.TerminalSnapshot
+			if openRes.Terminal != nil {
+				snapshot = openRes.Terminal.InitialSnapshot()
+			}
+
+			screenText := screenToText(snapshot.Screen, maxBytes)
+			type ScreenReport struct {
+				SessionID  string `json:"session_id"`
+				Generation int    `json:"generation"`
+				Columns    int    `json:"columns"`
+				Rows       int    `json:"rows"`
+				CursorX    int    `json:"cursor_x"`
+				CursorY    int    `json:"cursor_y"`
+				Sequence   uint64 `json:"sequence"`
+				Content    string `json:"content"`
+			}
+			report := ScreenReport{
+				SessionID:  openRes.Session.ID.String(),
+				Generation: int(openRes.Session.Generation),
+				Columns:    snapshot.Screen.Columns,
+				Rows:       snapshot.Screen.Rows,
+				CursorX:    snapshot.Screen.Cursor.X,
+				CursorY:    snapshot.Screen.Cursor.Y,
+				Sequence:   snapshot.Sequence,
+				Content:    screenText,
+			}
+			return NewJSONResult(report)
+
+		case "write_input":
+			// Write action is a mutation requiring grant
+			if s.Policy() != nil && s.Policy().IsReadOnly() {
+				return NewErrorResult("approval required: server is in read-only mode; cannot write input"), nil
+			}
+			if input.InputText == "" {
+				return NewErrorResult("write_input requires non-empty 'input_text'"), nil
+			}
+
+			openRes, err := client.Open(ctx, app.OpenRequest{
+				Ref:    input.SessionID,
+				Holder: input.Holder,
+			})
+			if err != nil {
+				if s.Audit() != nil {
+					s.Audit().Log(AuditEvent{
+						Tool:      "interact_session",
+						SessionID: input.SessionID,
+						Status:    "ERROR",
+						Error:     err.Error(),
+					})
+				}
+				return NewErrorResult(fmt.Sprintf("lease conflict or open failed: %v", err)), nil
+			}
+			defer func() {
+				if openRes.Terminal != nil {
+					_ = openRes.Terminal.Close()
+				}
+			}()
+
+			if input.ExpectedGeneration > 0 && int(openRes.Session.Generation) != input.ExpectedGeneration {
+				return NewErrorResult(fmt.Sprintf("attempt generation mismatch: expected %d, got %d", input.ExpectedGeneration, openRes.Session.Generation)), nil
+			}
+
+			if openRes.Terminal == nil {
+				return NewErrorResult("session terminal subscription is unavailable"), nil
+			}
+
+			written, err := openRes.Terminal.Write([]byte(input.InputText))
+			if err != nil {
+				return NewErrorResult(fmt.Sprintf("failed to write input: %v", err)), nil
+			}
+
+			if s.Audit() != nil {
+				s.Audit().Log(AuditEvent{
+					Tool:      "interact_session",
+					SessionID: openRes.Session.ID.String(),
+					Attempt:   int(openRes.Session.Generation),
+					Status:    "SUCCESS",
+				})
+			}
+
+			type WriteReport struct {
+				SessionID    string `json:"session_id"`
+				Generation   int    `json:"generation"`
+				BytesWritten int    `json:"bytes_written"`
+				Status       string `json:"status"`
+			}
+			return NewJSONResult(WriteReport{
+				SessionID:    openRes.Session.ID.String(),
+				Generation:   int(openRes.Session.Generation),
+				BytesWritten: written,
+				Status:       "INPUT_WRITTEN",
+			})
+
+		default:
+			return NewErrorResult(fmt.Sprintf("invalid action %q: must be 'read_screen' or 'write_input'", input.Action)), nil
+		}
+	})
+}
+
+func screenToText(screen app.TerminalScreen, maxBytes int) string {
+	var sb strings.Builder
+	for _, line := range screen.Lines {
+		var lineText strings.Builder
+		for _, cell := range line.Cells {
+			if cell.Text != "" {
+				lineText.WriteString(cell.Text)
+			} else {
+				lineText.WriteByte(' ')
+			}
+		}
+		trimmed := strings.TrimRight(lineText.String(), " ")
+		if sb.Len()+len(trimmed)+1 > maxBytes {
+			remaining := maxBytes - sb.Len()
+			if remaining > 0 && remaining <= len(trimmed) {
+				sb.WriteString(trimmed[:remaining])
+			}
+			break
+		}
+		sb.WriteString(trimmed)
+		sb.WriteByte('\n')
+	}
+	return sb.String()
 }

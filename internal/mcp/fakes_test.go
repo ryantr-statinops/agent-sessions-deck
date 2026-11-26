@@ -5,8 +5,38 @@ import (
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/workspace"
 )
+
+type fakeTerminalSubscription struct {
+	sessionID  session.ID
+	generation session.Generation
+	holder     string
+	snapshot   app.TerminalSnapshot
+	written    []byte
+	closed     bool
+}
+
+func (s *fakeTerminalSubscription) SessionID() session.ID             { return s.sessionID }
+func (s *fakeTerminalSubscription) Generation() session.Generation   { return s.generation }
+func (s *fakeTerminalSubscription) Holder() string                   { return s.holder }
+func (s *fakeTerminalSubscription) InitialSnapshot() app.TerminalSnapshot {
+	return s.snapshot
+}
+func (s *fakeTerminalSubscription) ReadFrame() (app.TerminalFrame, error) {
+	return app.TerminalFrame{}, nil
+}
+func (s *fakeTerminalSubscription) Read(p []byte) (int, error) { return 0, nil }
+func (s *fakeTerminalSubscription) Write(p []byte) (int, error) {
+	s.written = append(s.written, p...)
+	return len(p), nil
+}
+func (s *fakeTerminalSubscription) Resize(width, height int) error { return nil }
+func (s *fakeTerminalSubscription) Close() error {
+	s.closed = true
+	return nil
+}
 
 type fakeControlPlaneClient struct {
 	scanResult       app.ScanResult

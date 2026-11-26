@@ -178,3 +178,123 @@ func TestToolStopAndRestartSession(t *testing.T) {
 		t.Fatalf("unexpected restart result: %+v", resRestart)
 	}
 }
+
+func TestToolInteractSession(t *testing.T) {
+	sub := &fakeTerminalSubscription{
+		sessionID:  session.ID("sess-interact"),
+		generation: 1,
+		snapshot: app.TerminalSnapshot{
+			Sequence: 10,
+			Screen: app.TerminalScreen{
+				Columns: 80,
+				Rows:    24,
+				Lines: []app.TerminalLine{
+					{
+						Index: 0,
+						Cells: []app.TerminalCell{
+							{Text: "H"}, {Text: "e"}, {Text: "l"}, {Text: "l"}, {Text: "o"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := &fakeControlPlaneClient{
+		openResult: app.OpenResult{
+			Session: session.SessionSnapshot{
+				ID:         session.ID("sess-interact"),
+				Lifecycle:  session.LifecycleRunning,
+				Generation: 1,
+			},
+			Terminal: sub,
+		},
+	}
+
+	ro := false
+	policy, _ := NewPolicyEngine(config.MCP{
+		Enabled:  true,
+		ReadOnly: &ro,
+	})
+	srv := NewServer(ServerOptions{
+		Policy: policy,
+	})
+	RegisterMutationTools(srv, fakeClient)
+
+	ctx := context.Background()
+
+	// 1. read_screen
+	readArgs, _ := json.Marshal(map[string]any{
+		"session_id": "sess-interact",
+		"action":     "read_screen",
+	})
+	reqRead, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "interact_session",
+		Arguments: readArgs,
+	})
+	respRead, _, err := srv.HandleMessage(ctx, reqRead)
+	if err != nil || respRead.Error != nil {
+		t.Fatalf("read_screen failed: %v", err)
+	}
+	var resRead CallToolResult
+	_ = json.Unmarshal(respRead.Result, &resRead)
+	if !strings.Contains(resRead.Content[0].Text, "Hello") {
+		t.Fatalf("expected 'Hello' in screen read, got: %+v", resRead)
+	}
+
+	// 2. write_input
+	writeArgs, _ := json.Marshal(map[string]any{
+		"session_id":          "sess-interact",
+		"action":              "write_input",
+		"input_text":          "echo hi\n",
+		"expected_generation": 1,
+	})
+	reqWrite, _ := NewRequest(json.RawMessage("2"), "tools/call", CallToolParams{
+		Name:      "interact_session",
+		Arguments: writeArgs,
+	})
+	respWrite, _, err := srv.HandleMessage(ctx, reqWrite)
+	if err != nil || respWrite.Error != nil {
+		t.Fatalf("write_input failed: %v", err)
+	}
+	var resWrite CallToolResult
+	_ = json.Unmarshal(respWrite.Result, &resWrite)
+	if !strings.Contains(resWrite.Content[0].Text, "INPUT_WRITTEN") {
+		t.Fatalf("expected INPUT_WRITTEN, got: %+v", resWrite)
+	}
+	if string(sub.written) != "echo hi\n" {
+		t.Fatalf("expected written text 'echo hi\\n', got: %q", string(sub.written))
+	}
+}
+
+func TestToolInteractSessionReadOnlyRejection(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{}
+	ro := true
+	policy, _ := NewPolicyEngine(config.MCP{
+		Enabled:  true,
+		ReadOnly: &ro,
+	})
+	srv := NewServer(ServerOptions{
+		Policy: policy,
+	})
+	RegisterMutationTools(srv, fakeClient)
+
+	ctx := context.Background()
+	writeArgs, _ := json.Marshal(map[string]any{
+		"session_id": "sess-interact",
+		"action":     "write_input",
+		"input_text": "ls -la\n",
+	})
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "interact_session",
+		Arguments: writeArgs,
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected rpc error: %v", err)
+	}
+	// Under read-only policy, interact_session tool has Destructive: true annotation, so server rejects it with CodeApprovalRequired!
+	if resp.Error == nil || resp.Error.Code != CodeApprovalRequired {
+		t.Fatalf("expected CodeApprovalRequired, got: %+v", resp.Error)
+	}
+}
