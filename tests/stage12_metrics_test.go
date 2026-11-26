@@ -154,7 +154,7 @@ func TestStage12_DescendantAttributionBoundaries(t *testing.T) {
 	}
 
 	pageSize := uint64(os.Getpagesize())
-	expectedTreeRSS := (200 + 300) * pageSize
+	expectedTreeRSS := (100 + 200 + 300) * pageSize
 	if treeMetrics.TreeRSSBytes != expectedTreeRSS {
 		t.Fatalf("expected TreeRSSBytes %d, got %d", expectedTreeRSS, treeMetrics.TreeRSSBytes)
 	}
