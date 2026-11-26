@@ -146,10 +146,14 @@ func canonicalizePath(p string) (string, error) {
 	}
 	// If path exists on disk, evaluate symlinks to prevent symlink traversal escapes
 	resolved, err := filepath.EvalSymlinks(abs)
-	if err == nil {
-		return filepath.Clean(resolved), nil
+	if err != nil {
+		if _, statErr := os.Lstat(abs); statErr == nil {
+			// Path exists on disk but failed evaluation (e.g. symlink loop)
+			return "", err
+		}
+		return filepath.Clean(abs), nil
 	}
-	return filepath.Clean(abs), nil
+	return filepath.Clean(resolved), nil
 }
 
 func isInsideDirectory(parent, target string) bool {
