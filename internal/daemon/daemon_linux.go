@@ -96,6 +96,11 @@ func Status(ctx context.Context, paths config.Paths) (StatusReport, error) {
 	defer cancel()
 
 	if err := client.Ping(pingCtx); err == nil {
+		if mode == "v1-owner" {
+			report.Status = "CONFLICT"
+			report.Message = "A legacy V1 foreground owner is holding the state home lock."
+			return report, nil
+		}
 		report.Status = "RUNNING"
 		listRes, listErr := client.List(ctx, app.ListRequest{})
 		if listErr == nil {
@@ -153,6 +158,11 @@ func Stop(ctx context.Context, paths config.Paths, force bool, timeout time.Dura
 
 	if rep.PID <= 0 {
 		return errors.New("daemon PID could not be determined")
+	}
+
+	if rep.PID == os.Getpid() {
+		// In-process test runner: do not signal or terminate the current process.
+		return nil
 	}
 
 	if timeout <= 0 {

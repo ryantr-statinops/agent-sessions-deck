@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -139,6 +140,38 @@ func (w Workspace) DisplayName() string {
 
 // Equal reports whether two workspaces resolve to the same directory.
 func (w Workspace) Equal(other Workspace) bool { return w.id == other.id }
+
+type workspaceJSON struct {
+	ID   ID     `json:"id"`
+	Path string `json:"path"`
+	Git  *Git   `json:"git,omitempty"`
+}
+
+// MarshalJSON serializes a Workspace over JSON RPC preserving identity and path.
+func (w Workspace) MarshalJSON() ([]byte, error) {
+	return json.Marshal(workspaceJSON{
+		ID:   w.id,
+		Path: w.path,
+		Git:  w.git,
+	})
+}
+
+// UnmarshalJSON deserializes a Workspace from JSON RPC.
+func (w *Workspace) UnmarshalJSON(data []byte) error {
+	var raw workspaceJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	w.id = raw.ID
+	w.path = raw.Path
+	if w.id == "" && w.path != "" {
+		w.id = ID(w.path)
+	} else if w.path == "" && w.id != "" {
+		w.path = string(w.id)
+	}
+	w.git = raw.Git
+	return nil
+}
 
 // String renders the workspace for diagnostics.
 func (w Workspace) String() string {
