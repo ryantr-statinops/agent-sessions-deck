@@ -298,3 +298,100 @@ func TestToolInteractSessionReadOnlyRejection(t *testing.T) {
 		t.Fatalf("expected CodeApprovalRequired, got: %+v", resp.Error)
 	}
 }
+
+func TestMutationToolsLeaseConflictAndGenerationGuard(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		openErr: session.NewError(session.CodeConflict, "sess-conflict", "lease held by user on TUI", "wait until user detaches"),
+	}
+
+	ro := false
+	policy, _ := NewPolicyEngine(config.MCP{
+		Enabled:  true,
+		ReadOnly: &ro,
+	})
+	srv := NewServer(ServerOptions{
+		Policy: policy,
+	})
+	RegisterMutationTools(srv, fakeClient)
+
+	ctx := context.Background()
+
+	// 1. Lease collision
+	writeArgs, _ := json.Marshal(map[string]any{
+		"session_id": "sess-conflict",
+		"action":     "write_input",
+		"input_text": "pwd\n",
+	})
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "interact_session",
+		Arguments: writeArgs,
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	var res CallToolResult
+	_ = json.Unmarshal(resp.Result, &res)
+	if !res.IsError || !strings.Contains(res.Content[0].Text, "lease held by user") {
+		t.Fatalf("expected lease collision error result: %+v", res)
+	}
+
+	// 2. Generation mismatch guard
+	fakeClient.openErr = nil
+	fakeClient.openResult = app.OpenResult{
+		Session: session.SessionSnapshot{
+			ID:         session.ID("sess-gen"),
+			Generation: 2, // actual is 2
+		},
+		Terminal: &fakeTerminalSubscription{},
+	}
+	mismatchArgs, _ := json.Marshal(map[string]any{
+		"session_id":          "sess-gen",
+		"action":              "write_input",
+		"input_text":          "date\n",
+		"expected_generation": 1, // expected is 1
+	})
+	reqMismatch, _ := NewRequest(json.RawMessage("2"), "tools/call", CallToolParams{
+		Name:      "interact_session",
+		Arguments: mismatchArgs,
+	})
+	respMismatch, _, err := srv.HandleMessage(ctx, reqMismatch)
+	if err != nil || respMismatch.Error != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	var resMismatch CallToolResult
+	_ = json.Unmarshal(respMismatch.Result, &resMismatch)
+	if !resMismatch.IsError || !strings.Contains(resMismatch.Content[0].Text, "generation mismatch") {
+		t.Fatalf("expected generation mismatch error result: %+v", resMismatch)
+	}
+}
+
+func TestMutationToolsListContract(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{}
+	srv := NewServer(ServerOptions{})
+	RegisterMutationTools(srv, fakeClient)
+
+	ctx := context.Background()
+	req, _ := NewRequest(json.RawMessage("1"), "tools/list", nil)
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("tools/list failed: %v", err)
+	}
+
+	var listRes ListToolsResult
+	_ = json.Unmarshal(resp.Result, &listRes)
+
+	expectedMutations := []string{"start_session", "stop_session", "restart_session", "interact_session"}
+	toolMap := make(map[string]Tool)
+	for _, tool := range listRes.Tools {
+		toolMap[tool.Name] = tool
+		if tool.Annotations == nil || !tool.Annotations.Destructive {
+			t.Fatalf("mutation tool %q must have Destructive: true annotation", tool.Name)
+		}
+	}
+	for _, expected := range expectedMutations {
+		if _, ok := toolMap[expected]; !ok {
+			t.Fatalf("missing expected mutation tool: %q", expected)
+		}
+	}
+}
