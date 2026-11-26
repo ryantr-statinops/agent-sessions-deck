@@ -184,8 +184,8 @@ done
 	}
 
 	var jsonOutput struct {
-		Command    string                      `json:"command"`
-		Authority  session.Authority           `json:"authority"`
+		Command    string                       `json:"command"`
+		Authority  session.Authority            `json:"authority"`
 		Workspaces []workspace.WorkspaceSummary `json:"workspaces"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &jsonOutput); err != nil {
