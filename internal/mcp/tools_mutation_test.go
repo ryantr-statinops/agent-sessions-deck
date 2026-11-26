@@ -109,3 +109,72 @@ func TestToolStartSessionRejectionWhenReadOnly(t *testing.T) {
 		t.Fatalf("expected CodeApprovalRequired, got: %+v", resp.Error)
 	}
 }
+
+func TestToolStopAndRestartSession(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		stopResult: app.StopResult{
+			Stopped: true,
+		},
+		restartResult: app.RestartResult{
+			Session: session.SessionSnapshot{
+				ID:         session.ID("sess-restarted"),
+				Lifecycle:  session.LifecycleRunning,
+				Generation: 3,
+			},
+			PreviousGeneration: 2,
+		},
+	}
+
+	ro := false
+	policy, _ := NewPolicyEngine(config.MCP{
+		Enabled:  true,
+		ReadOnly: &ro,
+	})
+	srv := NewServer(ServerOptions{
+		Policy: policy,
+	})
+	RegisterMutationTools(srv, fakeClient)
+
+	ctx := context.Background()
+
+	// 1. stop_session
+	stopArgs, _ := json.Marshal(map[string]any{
+		"session_id": "sess-target",
+		"grace":      "3s",
+		"request_id": "req-stop-1",
+	})
+	reqStop, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "stop_session",
+		Arguments: stopArgs,
+	})
+	respStop, _, err := srv.HandleMessage(ctx, reqStop)
+	if err != nil || respStop.Error != nil {
+		t.Fatalf("stop_session failed: %v", err)
+	}
+	var resStop CallToolResult
+	_ = json.Unmarshal(respStop.Result, &resStop)
+	if !strings.Contains(resStop.Content[0].Text, `"stopped": true`) {
+		t.Fatalf("unexpected stop result: %+v", resStop)
+	}
+
+	// 2. restart_session
+	restartArgs, _ := json.Marshal(map[string]any{
+		"session_id":        "sess-target",
+		"target_generation": 2,
+		"force":             true,
+		"request_id":        "req-restart-1",
+	})
+	reqRestart, _ := NewRequest(json.RawMessage("2"), "tools/call", CallToolParams{
+		Name:      "restart_session",
+		Arguments: restartArgs,
+	})
+	respRestart, _, err := srv.HandleMessage(ctx, reqRestart)
+	if err != nil || respRestart.Error != nil {
+		t.Fatalf("restart_session failed: %v", err)
+	}
+	var resRestart CallToolResult
+	_ = json.Unmarshal(respRestart.Result, &resRestart)
+	if !strings.Contains(resRestart.Content[0].Text, "sess-restarted") || !strings.Contains(resRestart.Content[0].Text, `"generation": 3`) {
+		t.Fatalf("unexpected restart result: %+v", resRestart)
+	}
+}
