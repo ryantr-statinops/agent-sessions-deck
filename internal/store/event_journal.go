@@ -25,6 +25,14 @@ const MaxEventQueryLimit = 1000
 // does not advance strictly past the journal's last known revision.
 var ErrNonMonotonicRevision = errors.New("event revision must be strictly greater than last journal revision")
 
+// EventFilter specifies filtering and pagination parameters for journal queries.
+type EventFilter struct {
+	SessionID     events.SessionID
+	Type          events.Type
+	AfterRevision uint64
+	Limit         int
+}
+
 // EventJournal provides durable, append-only persistence for event streams.
 // Revisions are guaranteed to increase monotonically across writes and restarts.
 type EventJournal struct {
@@ -93,6 +101,84 @@ func (j *EventJournal) LastRevision() uint64 {
 	j.mu.RLock()
 	defer j.mu.RUnlock()
 	return j.lastRevision
+}
+
+// Query retrieves events matching filter, ordered by monotonic revision.
+func (j *EventJournal) Query(ctx context.Context, filter EventFilter) ([]events.Event, uint64, error) {
+	select {
+	case <-ctx.Done():
+		return nil, 0, ctx.Err()
+	default:
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = DefaultEventQueryLimit
+	} else if limit > MaxEventQueryLimit {
+		limit = MaxEventQueryLimit
+	}
+
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	f, err := os.Open(j.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, 0, nil
+		}
+		return nil, 0, fmt.Errorf("open journal file for query: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+
+	var results []events.Event
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		default:
+		}
+
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+
+		var ev events.Event
+		if err := json.Unmarshal(line, &ev); err != nil {
+			// Skip corrupted or unparseable lines gracefully
+			continue
+		}
+
+		rev := uint64(ev.Revision())
+		if rev <= filter.AfterRevision {
+			continue
+		}
+		if filter.SessionID != "" && ev.SessionID() != filter.SessionID {
+			continue
+		}
+		if filter.Type != "" && ev.Type() != filter.Type {
+			continue
+		}
+
+		results = append(results, ev)
+		if len(results) >= limit {
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil && len(results) == 0 {
+		return nil, 0, fmt.Errorf("scan journal events: %w", err)
+	}
+
+	nextRevision := filter.AfterRevision
+	if len(results) > 0 {
+		nextRevision = uint64(results[len(results)-1].Revision())
+	}
+
+	return results, nextRevision, nil
 }
 
 // Append appends a single event to the journal, ensuring strict monotonic revision ordering.
