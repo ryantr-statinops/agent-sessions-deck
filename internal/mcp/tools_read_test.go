@@ -8,6 +8,7 @@ import (
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
@@ -254,5 +255,37 @@ func TestToolSessionsOperations(t *testing.T) {
 	_ = json.Unmarshal(respFind.Result, &resFind)
 	if len(resFind.Content) == 0 || !strings.Contains(resFind.Content[0].Text, "sess-1111") {
 		t.Fatalf("unexpected find_session content: %+v", resFind)
+	}
+}
+
+func TestToolGetRecentEvents(t *testing.T) {
+	fakeClient := &fakeControlPlaneClient{
+		eventsResult: app.EventsResult{
+			NextRevision: 42,
+			Events:       []events.Event{},
+		},
+	}
+
+	srv := NewServer(ServerOptions{})
+	RegisterReadTools(srv, fakeClient)
+
+	ctx := context.Background()
+	args, _ := json.Marshal(map[string]any{
+		"session_id":     "sess-1111",
+		"after_revision": 10,
+		"limit":          50,
+	})
+	req, _ := NewRequest(json.RawMessage("1"), "tools/call", CallToolParams{
+		Name:      "get_recent_events",
+		Arguments: args,
+	})
+	resp, _, err := srv.HandleMessage(ctx, req)
+	if err != nil || resp.Error != nil {
+		t.Fatalf("get_recent_events failed: %v", err)
+	}
+	var res CallToolResult
+	_ = json.Unmarshal(resp.Result, &res)
+	if len(res.Content) == 0 || !strings.Contains(res.Content[0].Text, "next_revision") {
+		t.Fatalf("unexpected result: %+v", res)
 	}
 }

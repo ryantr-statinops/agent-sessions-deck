@@ -7,6 +7,7 @@ import (
 
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/agent"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/app"
+	"github.com/ryantr-statinops/agent-sessions-deck/internal/events"
 	"github.com/ryantr-statinops/agent-sessions-deck/internal/session"
 )
 
@@ -19,6 +20,7 @@ func RegisterReadTools(s *Server, client ControlPlaneClient) {
 	registerListSessions(s, client)
 	registerGetSession(s, client)
 	registerFindSession(s, client)
+	registerGetRecentEvents(s, client)
 }
 
 func registerListAgents(s *Server, client ControlPlaneClient) {
@@ -339,5 +341,73 @@ func registerFindSession(s *Server, client ControlPlaneClient) {
 			out = append(out, toSessionSummaryDTO(row))
 		}
 		return NewJSONResult(out)
+	})
+}
+
+func registerGetRecentEvents(s *Server, client ControlPlaneClient) {
+	s.RegisterTool(Tool{
+		Name:        "get_recent_events",
+		Description: "Query recent lifecycle, interactive, and process events from the journal with bounded pagination.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]PropertyDef{
+				"session_id": {
+					Type:        "string",
+					Description: "Optional filter for a specific session ID",
+				},
+				"type": {
+					Type:        "string",
+					Description: "Optional filter for event type (e.g. 'session.created', 'session.started')",
+				},
+				"after_revision": {
+					Type:        "integer",
+					Description: "Monotonic revision cursor to read events after",
+				},
+				"limit": {
+					Type:        "integer",
+					Description: "Max number of events to return (default 50, max 200)",
+				},
+			},
+		},
+		Annotations: &ToolAnnotation{ReadOnly: true},
+	}, func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+		var input struct {
+			SessionID     string `json:"session_id"`
+			Type          string `json:"type"`
+			AfterRevision uint64 `json:"after_revision"`
+			Limit         int    `json:"limit"`
+		}
+		if len(args) > 0 {
+			_ = json.Unmarshal(args, &input)
+		}
+
+		if input.Limit <= 0 {
+			input.Limit = 50
+		} else if input.Limit > 200 {
+			input.Limit = 200
+		}
+
+		res, err := client.Events(ctx, app.EventsRequest{
+			SessionID:     input.SessionID,
+			Type:          input.Type,
+			AfterRevision: input.AfterRevision,
+			Limit:         input.Limit,
+		})
+		if err != nil {
+			return NewErrorResult(fmt.Sprintf("failed to query events: %v", err)), nil
+		}
+
+		type EventsReport struct {
+			Events       []events.Event `json:"events"`
+			NextRevision uint64         `json:"next_revision"`
+			Count        int            `json:"count"`
+		}
+
+		report := EventsReport{
+			Events:       res.Events,
+			NextRevision: res.NextRevision,
+			Count:        len(res.Events),
+		}
+		return NewJSONResult(report)
 	})
 }
