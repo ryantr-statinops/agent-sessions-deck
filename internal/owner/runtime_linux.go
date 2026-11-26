@@ -138,7 +138,7 @@ func buildService(ctx context.Context, paths config.Paths, cfg config.Config, st
 		Events:     events.NewPublisher(),
 		Clock:      app.SystemClock{},
 		IDs:        app.RandomIDMinter{},
-	}, app.WithAuthority(authority))
+	}, app.WithAuthority(authority), app.WithGitCache(app.NewGitThrottleCache(app.DefaultGitThrottleTTL, gitClient.Probe, nil)))
 }
 
 func randomOwnerID() (string, error) {

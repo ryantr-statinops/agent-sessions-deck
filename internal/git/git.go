@@ -132,12 +132,12 @@ func (c *Client) probeOnce(ctx context.Context, dir string) (workspace.Git, erro
 	if err != nil {
 		return workspace.Git{}, err
 	}
-	branch, err := c.run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := c.run(ctx, dir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
-		return workspace.Git{}, err
+		branch, _ = c.run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	}
 	branch = strings.TrimSpace(branch)
-	detached := branch == "HEAD"
+	detached := branch == "" || branch == "HEAD"
 	status, err := c.run(ctx, dir, "status", "--porcelain=v1", "-z")
 	if err != nil {
 		return workspace.Git{}, err
